@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <title>Mosaic Viewer</title>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="style.css" type="text/css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="./js/jquery-3.6.3.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
+  <script type="text/javascript" src="https://xembook.github.io/nem2-browserify/symbol-sdk-pack-2.0.4.js"></script>
+  <script type="text/javascript" src="https://xembook.github.io/symbol-browserify/metal-on-symbol-0.2.2.js"></script>
+  <style>
+    /* デフォルトスタイル */
+    body {
+      background-color: rgb(255, 252, 255);
+    }
+
+    .container_hv {
+      text-align: center;
+      height: 100vh;
+      /* 画面の高さいっぱいに広げる */
+      padding-top: 100px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container_hv" style="color: rgb(0, 213, 255);text-align: center;">
+    <h4>Mosaic Viewer</h4>
+    <br>
+    <br>
+    <input type="text" id="addr" style="font-size: 25px" placeholder=" Enter Symbol Address" />
+    <br>
+    <br>
+    <br>
+    <button type="button" class="btn-gradient-radius" onclick="mosaic_checker();"
+      style="font-size: 30px; cursor: pointer">START</button>
+    <br>
+    <br>
+    <div id="kurukuru_re"></div>
+    <br>
+    <div id="mosaic_image" style="font-size: 30px"></div>
+    <br>
+    <br>
+    <br>
+    <div id="version">Powerd by SYMBOL<br><a href='https://x.com/mikunNEM'><small>@mikunNEM</small></a></div>
+
+  </div>
+  <script>
+    const NODE_Array = new Array('https://sym-main-03.opening-line.jp:3001', 'https://symbol.cryptobeliever.net:3001', 'https://symbol-mikun.net:3001', 'https://symbol-main-1.nemtus.com:3001');
+
+    const NODE = getRandomElement(NODE_Array);
+    console.log(NODE);
+
+    fetch(`${NODE}/node/health`)
+      .then((response) => {
+        // レスポンスが成功したかどうかを確認
+        if (!response.ok) {
+          throw new Error(`Network response was not ok: ${response.status}`);
+        }
+        // JSONデータを解析して返す
+        return response.json();
+      })
+      .then((data) => {
+        if (data.status.apiNode === "up" && data.status.db === "up") {
+          console.log("Node status =====", data.status);
+        } else {
+          swal(`Node Error!!`, `${NODE}`);
+        }
+      })
+      .catch((error) => {
+        console.error("Fetch error:", error);
+        swal(`Node Error!!`, `${NODE}`);
+      });
+
+    const sym = require('/node_modules/symbol-sdk');
+    const metal = require("/node_modules/metal-on-symbol");
+    const op = require("/node_modules/rxjs/operators");
+    const repo = new sym.RepositoryFactoryHttp(NODE);
+    const accountRepo = repo.createAccountRepository();
+    const nsRepo = repo.createNamespaceRepository();
+    const txRepo = repo.createTransactionRepository();
+    const mosaicRepo = repo.createMosaicRepository();
+    const metaRepo = repo.createMetadataRepository();
+    const nodeRepo = repo.createNodeRepository();
+
+    const symbolService = new metal.SymbolService({ node_url: NODE });
+    const metalService = new metal.MetalService(symbolService);
+
+
+    function uint8ArrayToBase64(bytes) {  // uint8Array を Base64文字列に変換
+      let binary = '';
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return window.btoa(binary);
+    }
+
+    function mosaic_checker() {
+
+      dispLoading();  // クルクル表示
+      let addr = document.getElementById('addr').value;
+
+      addr = addr.replace(/-/g, "");  // ハイフンを削除する
+      addr = addr.replace(/ /g, "");  // スペース削除
+      addr = addr.replace(/　/g, ""); //　スペース削除     
+
+      if (addr.length !== 39) {  // アドレス文字数チェック
+        swal(`Address Error!!`, "正しい文字数は39文字です").then(() => { removeLoading() });
+        return;
+      }
+
+      if (addr.charAt(0) !== "N") {
+        swal('Address Error !!', "メインネットアドレスの先頭は「N」です").then(() => { removeLoading() });
+        return;
+      }
+
+      address = sym.Address.createFromRawAddress(addr);
+      const dom_img = document.getElementById('mosaic_image');
+
+      console.log("dom_img =", dom_img); ////////////////
+      if (dom_img !== null) { // null じゃなければ子ノードを全て削除  
+        while (dom_img.firstChild) {
+          dom_img.removeChild(dom_img.firstChild);
+        }
+      }
+
+
+      accountRepo.getAccountInfo(address)
+        .toPromise()
+        .catch(() => swal(`Address Error!!`, "ネットワークに認識されていないアドレスです"))
+        .then(async (accountInfo) => {
+          console.log("accountInfo=", accountInfo);
+          console.log("account_Mosaics =", accountInfo.mosaics.length);
+
+          ///////////////  Mosaic Center  /////////////////////
+
+          for (let i = 0; i < accountInfo.mosaics.length; i++) {
+            // console.log(`========= ${accountInfo.mosaics[i].id.toHex()},[${i}] ========`);
+            const dom_mosaic_img = document.createElement('div');
+            const dom_NFT = document.createElement('div');
+
+            // mosaic-center の画像を表示
+            fetch(`https://mosaic-center.net/db/api.php?mode=search&mosaicid=${accountInfo.mosaics[i].id.toHex()}`)
+              .then((response) => {
+                // レスポンスが成功したかどうかを確認
+                if (!response.ok) {
+                  throw new Error(`Network response was not ok: ${response.status}`);
+                }
+                // JSONデータを解析して返す
+                return response.json();
+              })
+              .then((data) => {
+
+                // console.log(`mocaic-center / data===========,${data} / ${accountInfo.mosaics[i].id.toHex()}`);
+
+                (async () => {
+                  let mosaicNames = await nsRepo.getMosaicsNames([new sym.MosaicId(accountInfo.mosaics[i].id.id.toHex())])
+                    .toPromise()                                                                   // Namespaceの情報を取得する
+                    .catch(() => console.log(`Namespace Error!!`, `[${accountInfo.mosaics[i].id.id.toHex()}]`));
+
+                  if (data !== null) { //データがある場合
+                    console.count(`Mosaic Center 登録数 =`)
+                    if ([mosaicNames][0][0].names.length !== 0) {  // ネームスペースがある場合
+                      dom_mosaic_img.innerHTML = `<br><a class="btn-style-link" href="https://mosaic-center.net/" target="_blank">Mosaic Center</a>
+                                                     <br>
+                                                     <br>
+                                                     <a href="https://symbol.fyi/mosaics/${accountInfo.mosaics[i].id.toHex()}" target="_blank" width="200">
+                                                     <img class="mosaic_img" src=${data[0][7]} width="200">
+                                                     </a>
+                                                     <br>
+                                                     <a style="color: #1e90ff"><small>${[mosaicNames][0][0].names[0].name}</small></a>
+                                                     <br>
+                                                     <br>`
+                    } else {                                       // ネームスペースがない場合
+                      dom_mosaic_img.innerHTML = `<br><a class="btn-style-link" href="https://mosaic-center.net/" target="_blank">Mosaic Center</a><br><br>
+                                                     <a href="https://symbol.fyi/mosaics/${accountInfo.mosaics[i].id.toHex()}" target="_blank" width="200">
+                                                     <img class="mosaic_img" src=${data[0][7]} width="200">
+                                                     </a>
+                                                     <br>
+                                                     <a style="color: #1e90ff"><small>${data[0][2]}</small></a>
+                                                     <br>
+                                                     <br>`
+                    }
+                  }
+                })(); // async()
+
+              })
+              .catch((error) => {
+                console.error("Fetch error:", error);
+              });
+
+            dom_img.appendChild(dom_NFT);                       // dom_NFT をdom_imgに追加
+            dom_img.appendChild(dom_mosaic_img);                // dom_mosaic_img をdom_imgに追加
+
+            await new Promise(resolve => setTimeout(resolve, 100)); // 0.1秒処理を止める
+          } // for //
+
+          //dom_img.appendChild(document.createElement('hr'));  // 水平線を引く
+
+          ///////////////  ジムモン  /////////////////////
+
+          for (let i = 0; i < accountInfo.mosaics.length; i++) {
+            // console.log(`========= ${accountInfo.mosaics[i].id.toHex()},[${i}] ========`);
+            const dom_mosaic_img = document.createElement('div');
+            const dom_NFT = document.createElement('div');
+
+            xym_mon(accountInfo.mosaics[i].id, dom_NFT, accountInfo.publicKey); // xym_mon NFT画像表示
+
+            dom_img.appendChild(dom_NFT);                       // dom_NFT をdom_imgに追加
+            dom_img.appendChild(dom_mosaic_img);                // dom_mosaic_img をdom_imgに追加
+
+            await new Promise(resolve => setTimeout(resolve, 100)); // 0.1秒処理を止める
+          } // for //         
+
+          //dom_img.appendChild(document.createElement('hr'));  // 水平線を引く
+
+          ///////////////  nftdrive  /////////////////////
+
+          for (let i = 0; i < accountInfo.mosaics.length; i++) {
+            // console.log(`========= ${accountInfo.mosaics[i].id.toHex()},[${i}] ========`);
+            const dom_mosaic_img = document.createElement('div');
+            const dom_NFT = document.createElement('div');
+
+            nftdrive(accountInfo.mosaics[i].id, dom_NFT); // nftdrive NFT画像表示
+
+            dom_img.appendChild(dom_NFT);                       // dom_NFT をdom_imgに追加
+            dom_img.appendChild(dom_mosaic_img);                // dom_mosaic_img をdom_imgに追加
+
+            await new Promise(resolve => setTimeout(resolve, 100)); // 0.1秒処理を止める
+          } // for //            
+
+          //dom_img.appendChild(document.createElement('hr'));  // 水平線を引く
+
+          ///////////////  comsa  /////////////////////
+
+          for (let i = 0; i < accountInfo.mosaics.length; i++) {
+            // console.log(`========= ${accountInfo.mosaics[i].id.toHex()},[${i}] ========`);
+            const dom_mosaic_img = document.createElement('div');
+            const dom_NFT = document.createElement('div');
+
+            comsa(accountInfo.mosaics[i].id, dom_NFT);    // comsa NFT画像表示
+
+            dom_img.appendChild(dom_NFT);                       // dom_NFT をdom_imgに追加
+            dom_img.appendChild(dom_mosaic_img);                // dom_mosaic_img をdom_imgに追加
+
+            await new Promise(resolve => setTimeout(resolve, 100)); // 0.1秒処理を止める
+          } // for //            
+
+          //dom_img.appendChild(document.createElement('hr'));  // 水平線を引く
+
+          ///////////////  comsaNCFT  /////////////////////
+
+          for (let i = 0; i < accountInfo.mosaics.length; i++) {
+            // console.log(`========= ${accountInfo.mosaics[i].id.toHex()},[${i}] ========`);
+            const dom_mosaic_img = document.createElement('div');
+            const dom_NFT = document.createElement('div');
+
+            comsaNCFT(accountInfo.mosaics[i].id, dom_NFT);   // comsa NCFT画像表示                       
+
+            dom_img.appendChild(dom_NFT);                       // dom_NFT をdom_imgに追加
+            dom_img.appendChild(dom_mosaic_img);                // dom_mosaic_img をdom_imgに追加
+
+            await new Promise(resolve => setTimeout(resolve, 100)); // 0.1秒処理を止める
+          } // for //
+
+          //dom_img.appendChild(document.createElement('hr'));  // 水平線を引く
+
+          ///////////////  ukraine NFT  /////////////////////
+
+          for (let i = 0; i < accountInfo.mosaics.length; i++) {
+            // console.log(`========= ${accountInfo.mosaics[i].id.toHex()},[${i}] ========`);
+            const dom_mosaic_img = document.createElement('div');
+            const dom_NFT = document.createElement('div');
+
+            ukraine(accountInfo.mosaics[i].id, dom_NFT);   //  ukraine 画像表示                       
+
+            dom_img.appendChild(dom_NFT);                       // dom_NFT をdom_imgに追加
+            dom_img.appendChild(dom_mosaic_img);                // dom_mosaic_img をdom_imgに追加
+
+            await new Promise(resolve => setTimeout(resolve, 100)); // 0.1秒処理を止める
+          } // for //
+
+          removeLoading();  // クルクル非表示
+        }); // accountRepo                               
+
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //  NFT (ジムモン) をデコードして表示する //
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    function xym_mon(mosaic, dom_NFT, pubkey) {
+
+      mosaicRepo.getMosaic(mosaic.id)
+        .subscribe(async mo => {
+
+          let meta = await metaRepo.search({ targetId: mo.id, scopedMetadataKey: "F1974BA6F6CE5A63" }).toPromise();
+          let metadata = JSON.parse(meta.data[0].metadataEntry.value)
+
+          let result = await metalService.fetchByMetalId(metadata.MetalID);
+
+          console.log("ジムモン============ result", result);
+
+          if (result !== undefined) {
+            let uint8Array = result.payload // Uint8Arrayを取得
+            let base64 = uint8ArrayToBase64(uint8Array); // Base64に変換
+            let newSrc = 'data:image/png;base64,' + base64;
+
+            dom_NFT.innerHTML = `<br><a class="btn-style-link_1" href="https://xym-monster.netlify.app/list?publicKey=${pubkey}" target="_blank">XYM Monster</a><br><br>`
+            appendImg(newSrc, dom_NFT);
+          }
+        });
+
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //  NFT (NFTDrive) をデコードして表示する //
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+    function appendImg(src, dom_NFT) {          //   取得した画像をimgタグに挿入するfunctionを定義
+
+      (tag = document.createElement('img')).src = src;
+      tag.width = 200;
+      tag.className = "mosaic_img";
+      //document.getElementsByTagName('body')[0].appendChild(tag);
+      dom_NFT.appendChild(tag);
+    }
+    //////////////////////////////////////////////////////////////////////////////
+
+    function appendAudio(src, dom_NFT) {       // Audio
+
+      (tag = document.createElement('source')).src = src;
+      // tag.width = 200;
+      //document.getElementsByTagName('body')[0].appendChild(tag);
+      dom_NFT.appendChild(tag);
+      $('source').wrap('<audio controls>');
+    }
+    /////////////////////////////////////////////////////////////////////////////
+
+    function appendVideo(src, dom_NFT) {      // Video
+
+      (tag = document.createElement('source')).src = src;
+      //tag.width = 200;
+      //document.getElementsByTagName('body')[0].appendChild(tag);
+      dom_NFT.appendChild(tag);
+      $('source').wrap('<video controls>');
+    }
+    /////////////////////////////////////////////////////////////////////////////
+
+    function appendPdf(src, dom_NFT) {      // Pdf
+
+      (tag = document.createElement('embed')).src = src;
+      tag.width = 550;
+      tag.height = 600;
+      tag.className = "mosaic_img";
+      //document.getElementsByTagName('body')[0].appendChild(tag);
+      dom_NFT.appendChild(tag);
+    }
+    /////////////////////////////////////////////////////////////////////////////
+
+    function appendHtml(src, dom_NFT) {      // html
+
+      (tag = document.createElement('iframe')).src = src;
+      tag.width = 600;
+      tag.height = 700;
+      tag.className = "mosaic_img";
+      //document.getElementsByTagName('body')[0].appendChild(tag);
+      dom_NFT.appendChild(tag);
+    }
+    /////////////////////////////////////////////////////////////////////////////
+
+    function append_3D(src, dom_NFT, mo_id) {      // 3D
+
+      src = `https://nftdrive-ex.net/3dload.php?address=${mo_id}`;
+      (tag = document.createElement('iframe')).src = src;
+      tag.width = 300;
+      tag.height = 300;
+      tag.className = "mosaic_img";
+      //document.getElementsByTagName('body')[0].appendChild(tag);
+      dom_NFT.appendChild(tag);
+    }
+
+
+
+    //////////////////////////////////////////////////////////////////////////////
+    var nglist = [];
+    fetch('https://nftdrive-explorer.info/black_list/',)
+      .then((response) => {
+        return response.text().then(function (text) {
+          nglist = JSON.parse(text);
+          console.log(text);
+        });
+      });
+
+
+    function nftdrive(mosaic, dom_NFT) {
+      mosaicRepo.getMosaic(mosaic.id)
+        .pipe(
+          op.filter(mo => {
+            return !nglist.find(elem => elem[1] === mo.id.toHex())
+          })
+        )
+        .subscribe(async mo => {
+
+          const ownerAddress = mo.ownerAddress;
+          const preTxes = await txRepo.search({
+            type: [
+              sym.TransactionType.TRANSFER,
+            ],
+            address: ownerAddress, group: sym.TransactionGroup.Confirmed, pageSize: 10, order: sym.Order.Asc
+          }).toPromise();
+
+          if (preTxes.data.find(tx => {
+            if (tx.message === undefined) {
+              return false;
+            } else if (tx.message.payload === "Please note that this mosaic is an NFT.") {
+              needSample = false;
+              return true;
+            } else {
+              return false;
+            }
+          })) {
+
+            const tx = await txRepo.search({
+              type: [
+                sym.TransactionType.AGGREGATE_COMPLETE,
+                sym.TransactionType.AGGREGATE_BONDED,
+              ],
+              address: ownerAddress, group: sym.TransactionGroup.Confirmed, pageSize: 100
+            }).toPromise();
+
+            const aggTxes = [];
+            for (let idx = 0; idx < tx.data.length; idx++) {
+              const aggTx = await txRepo.getTransaction(tx.data[idx].transactionInfo.hash, sym.TransactionGroup.Confirmed).toPromise();
+
+              if (aggTx.innerTransactions.find(elem => elem.type === 16724)) {
+                aggTxes.push(aggTx);
+              }
+            }
+
+            const sotedAggTxes = aggTxes.sort(function (a, b) {
+
+              if (Number(a.innerTransactions[0].message.payload) > Number(b.innerTransactions[0].message.payload)) { return 1; } else { return -1; }
+            })
+
+            let nftData = "";
+            let header = 15;
+            for (let aggTx of sotedAggTxes) {
+              for (let idx = 0 + header; idx < aggTx.innerTransactions.length; idx++) {
+                nftData += aggTx.innerTransactions[idx].message.payload;
+              }
+              header = 1;
+            }
+
+
+            console.count("NFTDrive =====");
+
+            // console.log(`${mosaic.id.toHex()} ${nftData}`);
+            if (nftData.indexOf("data:image/") >= 0) {
+              dom_NFT.innerHTML = `<br><a class="btn-style-link_2" href="https://nftdrive-explorer.info/chart.html?net=main&mosaic=${mosaic.id.toHex()}" target="_blank">NFTDrive</a><br><br>`
+              appendImg(nftData, dom_NFT);
+            }
+            if (nftData.indexOf("data:audio/") === 0) {
+              dom_NFT.innerHTML = `<br><a class="btn-style-link_2" href="https://nftdrive-explorer.info/chart.html?net=main&mosaic=${mosaic.id.toHex()}" target="_blank">NFTDrive</a><br><br>`
+              appendAudio(nftData, dom_NFT);
+            }
+            if (nftData.indexOf("data:video/") === 0) {
+              dom_NFT.innerHTML = `<br><a class="btn-style-link_2" href="https://nftdrive-explorer.info/chart.html?net=main&mosaic=${mosaic.id.toHex()}" target="_blank">NFTDrive</a><br><br>`
+              appendVideo(nftData, dom_NFT);
+            }
+            if (nftData.indexOf("data:application/pdf") === 0) {
+              dom_NFT.innerHTML = `<br><a class="btn-style-link_2" href="https://nftdrive-explorer.info/chart.html?net=main&mosaic=${mosaic.id.toHex()}" target="_blank">NFTDrive</a><br><br>`
+              appendPdf(nftData, dom_NFT);
+            }
+            if (nftData.indexOf("data:text/html") === 0) {
+              dom_NFT.innerHTML = `<br><a class="btn-style-link_2" href="https://nftdrive-explorer.info/chart.html?net=main&mosaic=${mosaic.id.toHex()}" target="_blank">NFTDrive</a><br><br>`
+              appendHtml(nftData, dom_NFT);
+            }
+            if (nftData.indexOf("data:application/octet-stream") === 0) {
+              dom_NFT.innerHTML = `<br><div style="text-align: center"><a class="btn-style-link_2" href="https://nftdrive-explorer.info/chart.html?net=main&mosaic=${mosaic.id.toHex()}" target="_blank">NFTDrive</a></div><br>`
+              append_3D(nftData, dom_NFT, mo.id.toHex());
+            }
+          }
+        });
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //  NFT (COMSA) をデコードして表示する //
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    Buffer = require("/node_modules/buffer").Buffer;
+
+    function comsa(mosaic, dom_NFT) {
+
+      mosaicRepo.getMosaic(mosaic.id)
+        .subscribe(async mo => {
+
+          let meta = await metaRepo.search({
+            targetId: mo.id,
+            metadataType: sym.MetadataType.Mosaic,
+            pageSize: 100
+          }).toPromise();
+
+          let comsaHeader = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'DA030AA7795EBE75');
+          if (comsaHeader !== undefined) {
+
+            let headerJSON = JSON.parse(comsaHeader.metadataEntry.value);
+            console.log("ヘッダー情報 COMSA (NFT) ＝＝＝＝", headerJSON);
+            let aggTxes1 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'D77BFE313AF3EF1F');
+            let aggTxes2 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'AACFBE3CC93EABF3');
+            let aggTxes3 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'A0B069B710B3754C');
+            let aggTxes4 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'D75B016AA9FAC056');
+            let aggTxes5 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'BABD9C10F590F0F3');
+            let aggTxes6 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'D4B5933FA2FD62E7');
+            let aggTxes7 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'FA60A37C56457F1A');
+            let aggTxes8 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'FEDD372E157E9CF0');
+            let aggTxes9 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'C9384119AD73CF95');
+            let aggTxes10 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'EADE00D8D78AC0BD');
+            let aggTxes11 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'F6578214308E7990');
+
+            let aggTxes12 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'CE7226A968287482');
+            let aggTxes13 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'C2811F3B6F49C568');
+            let aggTxes14 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === '886A58DBE955A788');
+            let aggTxes15 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === '87300B99E5B10E2C');
+            let aggTxes16 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'EE553D7141B98753');
+            let aggTxes17 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'B3084C09176CA990');
+
+
+            let aggTxes = JSON.parse(aggTxes1.metadataEntry.value);
+
+            if (aggTxes2 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes2.metadataEntry.value));
+            }
+
+
+            if (aggTxes3 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes3.metadataEntry.value));
+            }
+
+            if (aggTxes4 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes4.metadataEntry.value));
+            }
+
+            if (aggTxes5 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes5.metadataEntry.value));
+            }
+
+            if (aggTxes6 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes6.metadataEntry.value));
+            }
+
+            if (aggTxes7 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes7.metadataEntry.value));
+            }
+
+            if (aggTxes8 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes8.metadataEntry.value));
+            }
+
+            if (aggTxes9 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes9.metadataEntry.value));
+            }
+
+            if (aggTxes10 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes10.metadataEntry.value));
+            }
+
+            if (aggTxes11 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes11.metadataEntry.value));
+            }
+
+            if (aggTxes12 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes12.metadataEntry.value));
+            }
+
+            if (aggTxes13 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes13.metadataEntry.value));
+            }
+
+            if (aggTxes14 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes14.metadataEntry.value));
+            }
+
+            if (aggTxes15 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes15.metadataEntry.value));
+            }
+
+            if (aggTxes16 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes16.metadataEntry.value));
+            }
+
+            if (aggTxes17 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes17.metadataEntry.value));
+            }
+
+
+            if (headerJSON.version === "comsa-nft-1.0") {  // バージョン 1.0 の場合 //////////////////////////////
+
+              console.log("%ccomsa-nft-1.0", "color: green");
+              console.count("nft-1.0")
+
+              let nftData = "";
+              let dataType = "data:" + headerJSON.mime_type + ";base64,";
+
+              for (let idx = 0; idx < aggTxes.length; idx++) {
+                const aggTx = await txRepo.getTransaction(aggTxes[idx], sym.TransactionGroup.Confirmed).toPromise();
+                for (let idx2 = 1; idx2 < aggTx.innerTransactions.length; idx2++) {
+                  let payload = aggTx.innerTransactions[idx2].message.payload;
+
+                  nftData += payload.slice(6);
+                }
+              }
+
+              dom_NFT.innerHTML = `<br><a class="btn-style-link_3" href="https://explorer.comsa.io/mosaic/${mosaic.id.toHex()}" target="_blank">COMSA < UNIQUE ></a><br><br>`
+
+              if (dataType.indexOf("data:image/") === 0) {
+                appendImg(dataType + nftData, dom_NFT);
+              }
+              if (dataType.indexOf("data:audio/") === 0) {
+                appendAudio(dataType + nftData, dom_NFT);
+              }
+              if (dataType.indexOf("data:video/") === 0) {
+                appendVideo(dataType + nftData, dom_NFT);
+              }
+            }
+
+            if (headerJSON.version === "comsa-nft-1.1") {  //  バージョン 1.1 の場合 //////////////////////////////
+
+              console.log("%ccomsa-nft-1.1", "color: blue");
+              console.count("nft-1.1");
+
+              let nftData = "";
+              let dataType = "data:" + headerJSON.mime_type + ";base64,";
+
+              for (aggTx of aggTxes) {
+                const data = { "transactionIds": [aggTx] }
+                const res = await fetch(nodeRepo.url + "/transactions/confirmed", {
+                  headers: {
+                    "Content-Type": "application/json;charset=utf-8"
+                  },
+                  method: "POST",
+                  body: JSON.stringify(data)
+                });
+                const json = await res.json();
+                const innerTxes = json[0].transaction.transactions;
+                let isSkip = true;
+                for (innerTx of innerTxes) {
+                  if (isSkip) {
+                    isSkip = false;
+                    continue;
+                  }
+                  nftData += innerTx.transaction.message;
+                  //console.log(innerTx.transaction.message);
+                }
+              }
+
+              dom_NFT.innerHTML = `<br><a class="btn-style-link_3" href="https://explorer.comsa.io/mosaic/${mosaic.id.toHex()}" target="_blank">COMSA < UNIQUE ></a><br><br>`
+
+
+              if (dataType.indexOf("data:image/") === 0) {
+                appendImg(dataType + Buffer.from(nftData, "hex").toString("base64"), dom_NFT);
+              }
+              if (dataType.indexOf("data:audio/") === 0) {
+                appendAudio(dataType + Buffer.from(nftData, "hex").toString("base64"), dom_NFT);
+              }
+              if (dataType.indexOf("data:video/") === 0) {
+                appendVideo(dataType + Buffer.from(nftData, "hex").toString("base64"), dom_NFT);
+              }
+            }
+
+
+          }
+        });
+
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //  NCFT BUNDLE (COMSA) をデコードして表示する //
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    function comsaNCFT(mosaic, dom_NFT) {
+
+      mosaicRepo.getMosaic(mosaic.id)
+        .subscribe(async mo => {
+          let meta = await metaRepo.search({
+            targetId: mo.id,
+            metadataType: sym.MetadataType.Mosaic,
+            pageSize: 100
+          }).toPromise();
+
+
+          let comsaNcftHeader = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === '8E0823CEF8A40075');
+          if (comsaNcftHeader !== undefined) {
+
+            console.log("%ccomsa NCFT", "color: pink");
+            console.count("ncft");
+
+            needSample = false;
+            let headerJSON = JSON.parse(comsaNcftHeader.metadataEntry.value);
+            console.log("ヘッダー情報 COMSA (NCFT)＝＝＝＝", headerJSON);
+            let aggTxes1 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'D77BFE313AF3EF1F');
+            let aggTxes2 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'AACFBE3CC93EABF3');
+            let aggTxes3 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'A0B069B710B3754C');
+            let aggTxes4 = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === 'D75B016AA9FAC056');
+
+            let aggTxes = JSON.parse(aggTxes1.metadataEntry.value);
+
+            if (aggTxes2 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes2.metadataEntry.value));
+            }
+
+            if (aggTxes3 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes3.metadataEntry.value));
+            }
+
+            if (aggTxes4 !== undefined) {
+              aggTxes = aggTxes.concat(JSON.parse(aggTxes4.metadataEntry.value));
+            }
+
+            let nftData = "";
+            let dataType = "data:" + headerJSON.mime_type + ";base64,";
+
+            for (aggTx of aggTxes) {
+              const data = { "transactionIds": [aggTx] }
+              const res = await fetch(nodeRepo.url + "/transactions/confirmed", {
+                headers: {
+                  "Content-Type": "application/json;charset=utf-8"
+                },
+                method: "POST",
+                body: JSON.stringify(data)
+              });
+              const json = await res.json();
+              const innerTxes = json[0].transaction.transactions;
+              let isSkip = true;
+              for (innerTx of innerTxes) {
+                if (isSkip) {
+                  isSkip = false;
+                  continue;
+                }
+                nftData += innerTx.transaction.message;
+              }
+            }
+
+            dom_NFT.innerHTML = `<br><a class="btn-style-link_4" href="https://explorer.comsa.io/mosaic/${mosaic.id.toHex()}" target="_blank">COMSA < BUNDLE ></a><br><br>`
+            //imgtarget++;
+
+
+            if (dataType.indexOf("data:image/") === 0) {
+              appendImg(dataType + Buffer.from(nftData, "hex").toString("base64"), dom_NFT);
+            }
+            if (dataType.indexOf("data:audio/") === 0) {
+              appendAudio(dataType + Buffer.from(nftData, "hex").toString("base64"), dom_NFT);
+            }
+            if (dataType.indexOf("data:video/") === 0) {
+              appendVideo(dataType + Buffer.from(nftData, "hex").toString("base64"), dom_NFT);
+            }
+
+            //createImgTag(dataType  + Buffer.from(nftData, "hex").toString("base64") ,imgtarget,escape_html(decodeURIComponent( sym.Convert.decodeHex(headerJSON.title))));
+          }
+        });
+
+    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //  ウクライナ NFT をデコードして表示する //
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    function ukraine(mosaic, dom_NFT) {
+
+      mosaicRepo.getMosaic(mosaic.id)
+        .subscribe(async mo => {
+
+          const meta = await metaRepo.search({
+            targetId: mo.id,
+            metadataType: sym.MetadataType.Mosaic,
+            pageSize: 100
+          }).toPromise();
+
+          const ukraineHeader = meta.data.find(tx => tx.metadataEntry.scopedMetadataKey.toHex() === '8AFD95A719B1BB90');
+          if (ukraineHeader !== undefined) {
+
+            console.log("%cukraine NFT", "color: red");
+            console.count("ukraine");
+
+            const rootTransactionHash = JSON.parse(ukraineHeader.metadataEntry.value).info.rootTransactionHash;
+            const tx = await txRepo.getTransactionsById([rootTransactionHash], sym.TransactionGroup.Confirmed).toPromise();
+            const aggTxes = [];
+            for (let i = 0; i < tx[0].innerTransactions[1].message.payload.length / 64; i++) {
+              aggTxes.push(tx[0].innerTransactions[1].message.payload.substr(i * 64, 64));
+            }
+
+            let nftData = "";
+            for (aggTx of aggTxes) {
+
+              const data = { "transactionIds": [aggTx] }
+              const res = await fetch(nodeRepo.url + "/transactions/confirmed", {
+                headers: {
+                  "Content-Type": "application/json;charset=utf-8"
+                },
+                method: "POST",
+                body: JSON.stringify(data)
+              });
+              const json = await res.json();
+              const innerTxes = json[0].transaction.transactions;
+              for (innerTx of innerTxes) {
+                nftData += innerTx.transaction.message;
+              }
+            }
+
+            const buffer = sym.Convert.hexToUint8(nftData);
+            const blob = new Blob([buffer], { type: 'image/png' });
+            const url = window.URL || window.webkitURL;
+
+            dom_NFT.innerHTML = `<br><a class="btn-style-link_5" href="https://symbol-ukraine.org/nft/${mosaic.id.toHex()}" target="_blank">Ukraine</a><br><br>`
+
+            appendImg(url.createObjectURL(blob), dom_NFT);
+          }
+        });
+    }
+
+
+
+    ////////////////////////////////////////////////
+    // クルクル回るgif を表示
+    ////////////////////////////////////////////////
+    /* ------------------------------
+     表示用の関数
+     ------------------------------ */
+
+    function dispLoading(msg) {    //
+      // 引数なしの場合、メッセージは非表示。
+      if (msg === undefined) msg = "";
+
+      // 画面表示メッセージを埋め込み
+      var innerMsg = "<div id='innerMsg_re'>" + msg + "</div>";
+
+      // ローディング画像が非表示かどうかチェックし、非表示の場合のみ出力。
+      if ($("#nowLoading_MV").length == 0) {
+        $("#kurukuru_re").append("<div id='nowLoading_MV'>" + innerMsg + "</div>");
+      }
+    }
+
+    /* ------------------------------
+     表示ストップ用の関数
+     ------------------------------ */
+
+    function removeLoading() {  //
+      $("#nowLoading_MV").remove();
+    }
+
+    // 配列からランダムに要素を選択する関数 ///////////////////////////
+    function getRandomElement(array) {
+      const randomIndex = Math.floor(Math.random() * array.length);
+      return array[randomIndex];
+    }
+
+  </script>
+</body>
+
+</html>

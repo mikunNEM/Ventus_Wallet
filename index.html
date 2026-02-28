@@ -1,0 +1,2171 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <title>Ventus Wallet (ウェンタスウォレット)</title>
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-NYBR78TJ5E"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-NYBR78TJ5E');
+  </script>
+
+  <link rel="stylesheet" href="./css/BGimg_ventus.css" type="text/css" media="all" id="switchCSS" />
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css"
+    integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.2/css/all.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+  <!--<link type="text/css" rel="stylesheet" href="./css/simplePagination.css"/>-->
+  <!--<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@latest/css/boxicons.min.css"> -->
+  <link rel="stylesheet" href="style.css" type="text/css">
+  <meta http-equiv="content-type" charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta http-equiv="Permissions-Policy" content="xr-spatial-tracking=*">
+
+  <script src="./js/jquery-3.6.3.min.js"></script>
+  <script src="./js/js.cookie.js"></script>
+  <script>
+    // CSSのURLを定義
+    var defaulturl = './css/BGimg_ventus.css'
+    var cyberpunkurl = './css/BGimg_cyberpunk.css';
+    var seaurl = './css/BGimg_sea.css';
+    var tomatinaurl = './css/BGimg_tomatina.css';
+    // 画面表示時のCSSの読み込み設定
+    $(document).ready(
+      function () {
+        if (!Cookies.get('cookieCSS')) {
+          // クッキー未登録であればデフォルト選択
+          $("#selectCSS").val("ventus");
+        } else if (Cookies.get('cookieCSS') == 'ventus') {
+          // クッキーにデフォルト登録であればデフォルト選択
+          $("#selectCSS").val("ventus");
+          // defaultCSSを読み込む
+          $("#switchCSS").attr("href", defaulturl);
+        } else if (Cookies.get('cookieCSS') == 'cyberpunk') {
+          $("#selectCSS").val("cyberpunk");
+          $("#switchCSS").attr("href", cyberpunkurl);
+        } else if (Cookies.get('cookieCSS') == 'sea') {
+          $("#selectCSS").val("sea");
+          $("#switchCSS").attr("href", seaurl);
+        } else if (Cookies.get('cookieCSS') == 'tomatina') {
+          $("#selectCSS").val("tomatina");
+          $("#switchCSS").attr("href", tomatinaurl);
+        }
+      }
+    );
+    // セレクトボックス操作時の設定
+    $(function () {
+      $('#selectCSS').change(function () {
+        // セレクトボックスのvalueを取得
+        var val = $(this).val();
+        // valueによって読み込むCSSを変更する
+        if (val == "ventus") {
+          cssurl = defaulturl;
+        } else if (val == "cyberpunk") {
+          cssurl = cyberpunkurl;
+        } else if (val == "sea") {
+          cssurl = seaurl;
+        } else if (val == "tomatina") {
+          cssurl = tomatinaurl;
+        }
+        // 選択結果をクッキーに登録する
+        Cookies.set('cookieCSS', val);
+        // CSSを読み込む
+        $("#switchCSS").attr("href", cssurl);
+      });
+    });
+  </script>
+</head>
+
+<body>
+
+  <div id="nav-wrapper" class="nav-wrapper">
+    <div class="hamburger" id="js-hamburger">
+      <span class="hamburger__line hamburger__line--1"></span>
+      <span class="hamburger__line hamburger__line--2"></span>
+      <span class="hamburger__line hamburger__line--3"></span>
+    </div>
+    <nav class="sp-nav">
+      <ul>
+        <li>背景選択: <select id="selectCSS">
+            <option value="ventus">Ventus</option>
+            <option value="cyberpunk">CyberPunk</option>
+            <option value="sea">Sea</option>
+            <option value="tomatina">Tomatina</option>
+          </select></li>
+        <br>
+        <li><a href="./Terms_of_use.html" target="_blank">利用規約</a></li>
+        <li><a href="https://note.com/mikun_nem/n/n5c21f4af8930/" target="_blank">使い方</a></li>
+        <li>
+          <div id="explorer"></div>
+        </li>
+        <li>
+          <div id="faucet"></div>
+        </li>
+        <li>
+          <div id="xembook"></div>
+        </li>
+        <li>
+          <div id="nftdrive_explorer"></div>
+        </li>
+        <li><a href="https://ventus-wallet.net/peernode/" target="_blank">⛓️Peer Node List⛓️</a></li>
+        <li><a href="https://xym-monster.netlify.app/" target="_blank">😈 XYM Monster 😈</a></li>
+        <li><a href="https://mosaic-center.net/" target="_blank">📝 Mosaic Center 📝</a></li>
+        <li><a href="https://ventus-wallet.net/richlist/" target="_blank">💰Mosaic Rich List💰</a></li>
+        <li><a href="https://ventus-wallet.net/Mosaic_Viewer" target="_blank">🖼️ Mosaic Viewer 🖼️</a></li>
+        <li>
+          <div id="hv_checker"></div>
+        </li>
+        <li>
+          <div id="QR_Auth"></div>
+        </li>
+        <li><a href="https://docs.sss-symbol.com/ja/" target="_blank">SSS Extension</a></li>
+        <li><a href="https://note.com/mahorobart/n/nd5f226887c2a" target="_blank">Ventusについて</a></li>
+        <li><a href="https://symbol-community.com" target="_blank">Symbol Community Web</a></li>
+        <li><a href="https://twitter.com/mikunNEM" target="_blank">Ventus Wallet 開発者</a></li>
+        <br>
+        <button id="js-show-popup_dona" class="btn btn-primary" style="font-size: 25px">開発者へ寄付</button>
+        <!-- <li><a href="./update.html" target="_blank">アップデート履歴</a></li> -->
+      </ul>
+    </nav>
+    <div class="black-bg" id="js-black-bg"></div>
+  </div>
+  <br>
+
+  <h1>Ventus Wallet</h1>
+  <h3>
+    <div id="netType"></div>
+  </h3>
+  <div class="wrapper">
+    <div class="left">
+      <div class="account-card">
+        <!--  <h2><a href="#" onclick="alert(`test`);" class="accountInfo">Account Info</a></h2> -->
+        <h2><button id="js-show-popup_aInfo" class="accountInfo">Account Info</button></h2>
+        <div id="m_ns_button" style="text-align: left">
+          <button id="js-show-popup_m" class="btn-gradient-radius">Mosaic</button>
+          <button id="js-show-popup_n" class="btn-gradient-radius">Namespace</button>
+          <button id="js-show-popup_Meta" class="btn-gradient-radius">Metadata</button>
+          <button id="js-show-popup_Msig" class="btn-gradient-radius">Multisig</button>
+        </div>
+        <div id="account_name" style="text-align: left"></div>
+        <hr>
+        <div class="container" style="color:blue">
+          <div id="multisig_account"></div>
+          <div id="wallet-addr"></div>
+        </div>
+        <div class="container" style="color:blue;">
+          <div id="wallet-xym"></div>
+          <br>
+          <div id="tree_button" style="text-align: right"></div>
+          <br>
+          <div style="text-align: right">
+            <button id="js-show-popup_multisig" class="btn-gradient-radius_2" style="font-size: 20px;">
+              <p id="account_append_info_1"></p>
+              <p id="account_append_info_2"></p>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sender-card">
+        <h2>Send</h2>
+        <div id="multisig_message" style="color:coral"></div>
+        <hr>
+        <!-- <a href="https://bit.ly/41uG3VR" target="_blank"><p style="text-align:right"><b>📖SYMBOLタウンリスト　</b></p></a> -->
+        <div class="textfiled-wrapper">
+          <div>宛　　先</div>
+          <input type="text" id="form-addr" class="textfiled" placeholder="　　　　　　 address   or   namespace" />
+        </div>
+
+        <div class="textfiled-wrapper">
+          <div>モザイク</div>
+          <!-- <select id="form-mosaic_ID" name="form-mosaic_ID" class="textfiled"></select>  -->
+          <!--セレクトボックス-->
+          <div class="form-mosaic_ID"></div>
+        </div>
+        <div id="hoyu-ryo" style="text-align: right;color: blue"></div>
+        <div id="kigen-gire" style="text-align: right;color: red"></div>
+
+        <div class="textfiled-wrapper">
+          <div>数　　量</div>
+          <input type="text" id="form-amount" class="textfiled" style="line-height:1" />
+        </div>
+
+        <div class="textfiled-wrapper">
+          <div>メッセージ</div>
+          <input type="text" id="form-message" class="textfiled2" style="line-height:3" />
+        </div>
+
+        <div class="textfiled-wrapper">
+          <div>メッセージの暗号化</div>
+          <!-- <select id="form-enc">
+            <option value="0">Plain message　　　(平文)</option>
+            <option value="1">Encrypted message (暗号化)</option>
+          </select> -->
+          <div class="toggle0">
+            <input type="checkbox" name="check0" value="form-enc" id="form-enc" />
+          </div>
+        </div>
+
+        <div class="textfiled-wrapper">
+          <div>トランザクション手数料</div>
+          <select id="form-maxfee">
+            <option value="0.02">0.02 xym (slow)</option>
+            <option value="0.04">0.04 xym</option>
+            <option value="0.07">0.07 xym</option>
+            <option value="0.13"> 0.13 xym (fast)</option>
+          </select>
+        </div>
+        <br>
+        <div id="button-haichi">
+          <input type="button" onclick="handleSSS();" value="Send" class="button-sign" />
+        </div>
+        <div id="agg_button" style="text-align: left">　　<button id="js-show-popup_agg"
+            class="btn-gradient-radius">Aggregate Tx</button></div>
+      </div>
+      <div id="version"></div>
+    </div>
+    <div class="right">
+      <div class="tx-card">
+        <h2>Tx History</h2>
+
+        <div style="text-align: right">
+          <div style="display: inline-block; _display: inline;">Page:</div>
+
+          <select id="page_num1" onchange="select_Page();">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+            <option value="11">11</option>
+            <option value="12">12</option>
+            <option value="13">13</option>
+            <option value="14">14</option>
+            <option value="15">15</option>
+            <option value="16">16</option>
+            <option value="17">17</option>
+            <option value="18">18</option>
+            <option value="19">19</option>
+            <option value="20">20</option>
+            <option value="21">21</option>
+            <option value="22">22</option>
+            <option value="23">23</option>
+            <option value="24">24</option>
+            <option value="25">25</option>
+            <option value="26">26</option>
+            <option value="27">27</option>
+            <option value="28">28</option>
+            <option value="29">29</option>
+            <option value="30">30</option>
+            <option value="31">31</option>
+            <option value="32">32</option>
+            <option value="33">33</option>
+            <option value="34">34</option>
+            <option value="35">35</option>
+            <option value="36">36</option>
+            <option value="37">37</option>
+            <option value="38">38</option>
+            <option value="39">39</option>
+            <option value="40">40</option>
+            <option value="41">41</option>
+            <option value="42">42</option>
+            <option value="43">43</option>
+            <option value="44">44</option>
+            <option value="45">45</option>
+            <option value="46">46</option>
+            <option value="47">47</option>
+            <option value="48">48</option>
+            <option value="49">49</option>
+            <option value="50">50</option>
+          </select>
+        </div>
+
+        <hr>
+        <div id="wallet-transactions"></div> <!--  トランザクション履歴   -->
+
+      </div>
+    </div>
+  </div>
+
+  <!--   popup  ユニコーン   ----------------------------------->
+  <div id="popup" class="popup">
+    <div class="popup-inner">
+      <div class="img"><img src="./src/unicorn.gif" alt="ポップアップ画像"></div>
+    </div><!-- .popup-inner -->
+    <div id="bg-black" class="bg-black"></div>
+  </div><!-- #popup -->
+
+
+  <!--    popup  モザイク作成   ------------------------------------>
+  <div id="js-popup_m" class="popup_m">
+    <div class="popup_m-inner">
+      <div class="close-btn" id="js-close-btn_m"><i class="fas fa-times"></i></div>
+      <div class="Form">
+        <h4>Mosaic</h4>
+        <div class="Form-Item">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">供給量</span></p>
+          <input type="text" class="Form-Item-Input" id="SupplyAmount" placeholder="　1 〜 8999999999000000">
+        </div>
+        <div class="Form-Item">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">有効期限</span><small>&nbsp;&nbsp;<br>　約30秒 = 1
+              (Block)</br>　無期限 = 0</small></p>
+          <input type="text" class="Form-Item-Input" id="Duration1" placeholder=" 　0 〜 315360000 (Block)"
+            onchange="ex_date1();" />
+          <div id="ex_date1" style="text-align:right"></div>
+        </div>
+        <div class="Form-Item">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">可分性</span><small><br>　小数点以下の桁数</small></p>
+          <div class="Form-Item-Input" style="text-align: center">
+            <select class="divisibility" id="Divisibility">
+              <option value="0">0</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+            </select>
+          </div>
+        </div>
+        <div class="Form-Item">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">制限可</span>　⚠️</p>
+          <div class="toggle3">
+            <input type="checkbox" name="check3" value="Restrictable" id="Restrictable" />
+          </div>
+          　　　　　　<p>※モザイク制限は未実装です</p>
+        </div>
+        <div class="Form-Item">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">供給量可変</span>　⬇️⬆️</p>
+          <div class="toggle1">
+            <input type="checkbox" name="check1" value="Supply_M" id="Supply_M" />
+          </div>
+        </div>
+        <div class="Form-Item">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">転送可</span>　➡️</p>
+          <div class="toggle2">
+            <input type="checkbox" name="check2" value="Transferable" id="Transferable" />
+          </div>
+        </div>
+        <div class="Form-Item">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">回収可</span>　♻︎</p>
+          <div class="toggle4">
+            <input type="checkbox" name="check4" value="Revokable" id="Revokable" />
+          </div>
+        </div>
+        <div class="Form-Item">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">トランザクション手数料</span></p>
+          <div class="Form-Item-Input" style="text-align: center">
+            <select class="re_maxFee" id="re_maxFee_m">
+              <option value="0.04">0.04 xym (slow)</option>
+              <option value="0.05">0.05 xym</option>
+              <option value="0.07">0.07 xym</option>
+              <option value="0.1">0.1 xym (fast)</option>
+            </select>
+          </div>
+        </div>
+        <br>
+        <input type="button" onclick="Onclick_mosaic();" class="Form-Btn" id="js-popup_m" value="作成" />
+        <br>
+        <div style="text-align:center">レンタル手数料&nbsp; 50 XYM</div>
+        <br>
+        <div style="text-align:right"><button id="js-show-popup_sup" class="popup_sub_button">⬇️ 供給量変更 ⬆️</button></div>
+        <br>
+        <div style="text-align:right"><button id="js-show-popup_r" class="popup_sub_button">♻︎ モザイク回収 ♻︎</button></div>
+        <div style="text-align:center"><i><b><big>発行したモザイク</big></b></i></div>
+
+        <div style="text-align: right">
+          <div style="display: inline-block; _display: inline;">Page:</div>
+          <select id="page_num_mosa1" onchange="select_Page_mosa1();">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+            <option value="11">11</option>
+            <option value="12">12</option>
+            <option value="13">13</option>
+            <option value="14">14</option>
+            <option value="15">15</option>
+            <option value="16">16</option>
+            <option value="17">17</option>
+            <option value="18">18</option>
+            <option value="19">19</option>
+            <option value="20">20</option>
+          </select>
+        </div>
+        <br>
+        <table id="ms_table"></table>
+      </div>
+    </div>
+    <div class="black-background_m" id="js-black-bg_m"></div>
+  </div>
+
+  <!-- ------------------------------------------->
+
+  <!--    popup  namespace 作成   -->
+  <div id="js-popup_n" class="popup_n">
+    <div class="popup_n-inner">
+      <div class="close-btn" id="js-close-btn_n"><i class="fas fa-times"></i></div>
+      <div class="Form2">
+        <h4>Namespace</h4>
+        <div class="Form-Item2">
+          <p class="Form-Item-Label"><span
+              class="Form-Item-Label-Required2">レンタル期間</span><small></br>　&nbsp;(Duration)&nbsp;&nbsp;　約30日 =
+              86,400</br>　　　　　　　　約1年 = 1,051,200</br>　　　　　　　　約5年 = 5,256,000</small></p>
+          <input type="text" class="Form-Item-Input_N" id="Duration2" placeholder=" 　86400 〜 5256000 (Block)"
+            onchange="ex_date2();feeCalc();" />
+          <div id="ex_date2" style="text-align:right"></div>
+        </div>
+        <div class="Form-Item2">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required2">ネームスペース</span></br></p>
+          <input type="text" class="Form-Item-Input_N" id="Namespace" placeholder="" />
+        </div>
+        <div class="Form-Item2">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required2">トランザクション手数料</span></p>
+          <div class="Form-Item-Input" style="text-align: center">
+            <select class="re_maxFee" id="re_maxFee_n">
+              <option value="0.02">0.02 xym (slow)</option>
+              <option value="0.04">0.04 xym</option>
+              <option value="0.07">0.07 xym</option>
+              <option value="0.1">0.1 xym (fast)</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="ns_fee" style="text-align:center"></div>
+        <input type="button" onclick="Onclick_Namespace();" class="Form-Btn" id="js-popup_n" value="作成 / 更新" />
+        <br>
+        <br>
+        <div style="text-align:right"><button id="js-show-popup_L" class="popup_sub_button">エイリアスリンク</button></div></br>
+        <div style="text-align:right"><button id="js-show-popup_sn" class="popup_sub_button">サブネームスペース</button></div>
+        <div style="text-align:center"><i><b><big>所有ネームスペース</big></b></i></div>
+
+        <div style="text-align: right">
+          <div style="display: inline-block; _display: inline;">Page:</div>
+          <select id="page_num_namespace" onchange="select_Page_namespace();">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+            <option value="11">11</option>
+            <option value="12">12</option>
+            <option value="13">13</option>
+            <option value="14">14</option>
+            <option value="15">15</option>
+            <option value="16">16</option>
+            <option value="17">17</option>
+            <option value="18">18</option>
+            <option value="19">19</option>
+            <option value="20">20</option>
+          </select>
+        </div>
+        <br>
+        <table id="ns_table"></table>
+        <br>
+        ※ 「レンタル期間」 ➕ 「猶予期間」 が<b>ネームスペース更新期限</b>になります。
+        <br>
+        <div>※ <b>ネームスペース更新期限</b>の 30日前(猶予期間)に、ステータスが無効❌になります。テストネットでは 更新期限の 1日前(猶予期間)に、ステータスが無効❌になります。</div>
+      </div>
+    </div>
+    <div class="black-background_n" id="js-black-bg_n"></div>
+  </div>
+
+  <!--    popup  sub namespace 作成   ------>
+  <div id="js-popup_sn" class="popup_sn">
+    <div class="popup_sn-inner">
+      <div class="close-btn" id="js-close-btn_sn"><i class="fas fa-times"></i></div>
+      <div class="Form_sn">
+        <h4>Sub Namespace</h4>
+
+        <div class="Form-Item_sn">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sn">ルートネームスペース</span></p>
+          <input type="text" class="Form-Item-Input_sn" id="rootNamespace" />
+        </div>
+
+
+        <div class="Form-Item_sn">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sn">サブネームスペース</span></br></p>
+          <input type="text" class="Form-Item-Input_sn" id="subNamespace" placeholder="" />
+        </div>
+        <div class="Form-Item_sn">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sn">トランザクション手数料</span></p>
+          <div class="Form-Item-Input" style="text-align: center">
+            <select class="re_maxFee" id="re_maxFee_sn">
+              <option value="0.02">0.02 xym (slow)</option>
+              <option value="0.04">0.04 xym</option>
+              <option value="0.07">0.07 xym</option>
+              <option value="0.1">0.1 xym (fast)</option>
+            </select>
+          </div>
+        </div>
+        <input type="button" onclick="Onclick_subNamespace();" class="Form-Btn" id="js-popup_sn" value="作成" />
+        <br>
+        <div style="text-align:center">レンタル手数料&nbsp; 10 XYM</div>
+        <br>
+        <br>
+        <br>
+        <div>※ ルートネームスペースのレンタル有効期限と、サブネームスペースのレンタル有効期限は同じです。
+          <br>※ サブネームスペースは２階層まで登録出来ます。
+          <br>
+          <br>
+          <登録例>
+            <br>ルートネームスペース aaa　 　　/　サブネームスペース bbb → aaa.bbb
+            <br>ルートネームスペース aaa.bbb　/　サブネームスペース ccc → aaa.bbb.ccc
+        </div>
+      </div>
+    </div>
+    <div class="black-background_sn" id="js-black-bg_sn"></div>
+  </div>
+
+  <!--    popup  モザイク供給量変更   ------------------------------------>
+  <div id="js-popup_sup" class="popup_sup">
+    <div class="popup_sup-inner">
+      <div class="close-btn" id="js-close-btn_sup"><i class="fas fa-times"></i></div>
+      <div class="Form_sup">
+        <h4>モザイク供給量変更</h4>
+
+        <div class="Form-Item">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sup">モザイク ID</span></p>
+          <div class="Form-Item-Input_sup" style="text-align: center">
+            <div class="select_mosaic_sup"></div>
+          </div>
+        </div>
+
+        <div class="Form-Item">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sup">減少　/　 増加</span></p>
+          <div style="text-align: right">　　　　　　　　　減少⬇️</div>
+          <div class="toggle5">
+            <input type="checkbox" name="check5" value="change_sup" id="change_sup" />
+          </div>
+          <div style="text-align: left">⬆️増加</div>
+        </div>
+
+        <div class="Form-Item">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sup">変更量</span></p>
+          <input type="text" class="Form-Item-Input" id="change_Amount" />
+        </div>
+
+        <div class="Form-Item">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sup">トランザクション手数料</span></p>
+          <div class="Form-Item-Input" style="text-align: center">
+            <select class="re_maxFee" id="re_maxFee_sup">
+              <option value="0.04">0.02 xym (slow)</option>
+              <option value="0.05">0.04 xym</option>
+              <option value="0.07">0.07 xym</option>
+              <option value="0.1">0.1 xym (fast)</option>
+            </select>
+          </div>
+        </div>
+        <br>
+        <input type="button" onclick="mosaic_supply();" class="Form-Btn" id="js-popup_sup" value="変更" />
+      </div>
+    </div>
+    <div class="black-background_sup" id="js-black-bg_sup"></div>
+  </div>
+
+
+  <!-- ------- popup revokable mosaic モザイク回収　---------------->
+
+  <div id="js-popup_r" class="popup_r">
+    <div class="popup_r-inner">
+      <div class="close-btn" id="js-close-btn_r"><i class="fas fa-times"></i></div>
+      <div class="Form_r">
+        <h4>♻️ モザイク回収 ♻️</h4>
+        　　　　　個別回収
+        <div class="Form-Item_r" style="border-top: 3px solid rgb(0, 204, 255)">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_r">モザイク</span></br></p>
+          <div class="Form-Item-Input" style="text-align: center">
+            <div class="revoke_select"></div>
+          </div>
+        </div>
+        <div class="Form-Item_r">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_r">アドレス</span></p>
+          <input type="text" class="Form-Item-Input_r" id="holderAddress" />
+        </div>
+        <div class="Form-Item_r">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_r">数量</span></br></p>
+          <input type="text" class="Form-Item-Input_r" id="re_amount" />
+        </div>
+        　　　　まとめて回収
+        <div class="Form-Item_r" style="border-top: 3px solid rgb(0, 204, 255)">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_r">上位100件まとめて回収</span></p>
+          <div class="toggle7">
+            <input type="checkbox" name="check7" value="re_agg_check" id="re_agg_check" />
+          </div>
+        </div>
+        　　ファイルで指定して回収
+        <div class="Form-Item_r"
+          style="border-top: 3px solid rgb(0, 204, 255);border-bottom: 0px solid rgb(0, 204, 255)">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_r">Address エラーチェック</span></br></p>
+          <div class="toggle8">
+            <input type="checkbox" name="check8" value="csv_check_re" id="csv_check_re" />
+          </div>
+        </div>
+
+        <div class="Form-Item_r"
+          style="border-top: 0px solid rgb(0, 204, 255);border-bottom: 3px solid rgb(0, 204, 255)">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_r">CSVファイルを選択</span></p>
+          <label class="Address_List" style="margin-left: 100px">
+            <input type="file" id="upload-file_re">Address List (.csv)
+            <!-- address ファイルを選択 -->
+          </label>
+          <div style="display: inline-block; _display: inline;">
+            <p1>　選択されていません</p1>
+          </div>
+          <div id="kurukuru_re"></div>
+        </div>
+
+        <input type="button" onclick="revoke_mosaic();" class="Form-Btn" id="js-popup_r" value="回収" />
+        <br>
+        <div style="text-align:center">fee Multiprier = 100</div>
+        <br>
+        <div id="fee_rev" style="text-align:right"></div>
+
+        <br>
+        <br>
+        <div style="text-align: center">
+          <div class="btn-gradient-radius" style="font-size: 20px">Mosaic Rich List</div>
+        </div>
+        <br>
+
+        <div id="mosaic_ID_rev" style="text-align: center"></div>
+        <div id="namespace_rev" style="text-align: center"></div>
+        <br>
+        <div id="mosaic_img"></div>
+
+        <div style="text-align: right; padding-right: 120px">
+          <div style="display: inline-block; _display: inline;">Page:</div>
+          <select id="page_num_holder1" onchange="holder_list();">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+          </select>
+        </div>
+
+        <br>
+        <div class="table-container">
+          <button id="download_csv_button">CSVダウンロード</button>
+          <table id="holder_table"></table>
+        </div>
+      </div>
+    </div>
+    <div class="black-background_r" id="js-black-bg_r"></div>
+  </div>
+
+  <!-- ------- popup エイリアスリンク ---------------->
+
+  <div id="js-popup_L" class="popup_L">
+    <div class="popup_L-inner">
+      <div class="close-btn" id="js-close-btn_L"><i class="fas fa-times"></i></div>
+      <div class="Form_L">
+        <h4>エイリアスリンク</h4>
+        <div class="Form-Item_L">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_L">ネームスペース</span></br></p>
+          <div class="Form-Item-Input_L" style="text-align: center">
+            <div class="Namespace_select"></div>
+          </div>
+        </div>
+        <div class="Form-Item_L">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_L">エイリアスタイプ</span></br></p>
+          <div class="Form-Item-Input_L" style="text-align: center">
+            <select class="alias_type" id="alias_type">
+              <option value="0">アドレスにリンク</option>
+              <option value="1">モザイクにリンク</option>
+              <option value="2">アドレスからリンク解除</option>
+              <option value="3">モザイクからリンク解除</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="Form-Item_L">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_L">アドレス / モザイクID</span></br></p>
+          <input type="text" class="Form-Item-Input_L" id="Link_Address" />
+        </div>
+
+        <!-- <div class="Form-Item_L">
+        <p class="Form-Item-Label"><span class="Form-Item-Label-Required_L">モザイクID</span></br></p>
+        <input type="text" class="Form-Item-Input_L" id="Link_Mosaic_ID"/>
+      </div>  -->
+
+        <div class="Form-Item_L">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_L">トランザクション手数料</span></br></p>
+          <div class="Form-Item-Input_L" style="text-align: center">
+            <select class="re_maxFee" id="re_maxFee_L">
+              <option value="0.02">0.02 xym (slow)</option>
+              <option value="0.04">0.04 xym</option>
+              <option value="0.07">0.07 xym</option>
+              <option value="0.1">0.1 xym (fast)</option>
+            </select>
+          </div>
+        </div>
+
+        <input type="button" onclick="alias_Link();" class="Form-Btn" id="js-popup_L" value="リンク / リンク解除" />
+
+      </div>
+    </div>
+    <div class="black-background_L" id="js-black-bg_L"></div>
+  </div>
+
+  <!-- ------- popup Metadata  ---------------->
+
+  <div id="js-popup_Meta" class="popup_Meta">
+    <div class="popup_Meta-inner">
+      <div class="close-btn" id="js-close-btn_Meta"><i class="fas fa-times"></i></div>
+      <div class="Form_Meta">
+        <h4>Metadata</h4>
+        <div class="Form-Item_Meta">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Meta">メタデータ キー</span></br></p>
+          <div class="Form-Item-Input_Meta" style="text-align: center">
+            <div class="Meta_select"></div>
+          </div>
+        </div>
+        <div class="Form-Item_Meta">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Meta">タイプ</span></br></p>
+          <div class="Form-Item-Input_Meta" style="text-align: center">
+            <select class="Meta_type" id="Meta_type" onchange="MetaKey_select();">
+              <option value="-1">--- Select ---</option>
+              <option value="0">Account (Address)</option>
+              <option value="1">Mosaic</option>
+              <option value="2">Namespace</option>
+            </select>
+          </div>
+        </div>
+        <div id="meta_address"></div>
+
+        <div class="Form-Item_Meta" id="meta_mosaic" style="display: none">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Meta">モザイク ID</span></p>
+          <div class="Form-Item-Input_Meta" style="text-align: center">
+            <div class="select_mosaicID"></div>
+          </div>
+        </div>
+
+        <div class="Form-Item_Meta" id="meta_namespace" style="display: none">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Meta">ネームスペース</span></p>
+          <div class="Form-Item-Input_Meta" style="text-align: center">
+            <div class="Namespace_select_N"></div>
+          </div>
+        </div>
+
+        <div class="Form-Item_Meta">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Meta">value(値)</span></br></p>
+          <input type="text" class="Form-Item-Input_Meta_value" id="Meta_value" />
+        </div>
+
+        <input type="button" onclick="Metadata();" class="Form-Btn" id="js-popup_Meta" value="登録 / 更新" />
+        <br>
+        <div style="text-align:center">fee Multiprier = 100</div>
+        <div id="Meta_fee1" style="text-align:right"></div>
+        <br>
+        <br>
+        <br>
+        <div style="text-align:center"><i><b><big>メタデータ エントリー</big></b></i></div>
+
+        <div style="text-align: right">
+          <div style="display: inline-block; _display: inline;">Page:</div>
+
+          <select id="page_num_meta" onchange="select_Page_meta();">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+            <option value="11">11</option>
+            <option value="12">12</option>
+            <option value="13">13</option>
+            <option value="14">14</option>
+            <option value="15">15</option>
+            <option value="16">16</option>
+            <option value="17">17</option>
+            <option value="18">18</option>
+            <option value="19">19</option>
+            <option value="20">20</option>
+          </select>
+        </div>
+        <br>
+        <table id="Meta_table"></table>
+        <br>
+        <div>
+          <br>※日本語の場合 341文字(1023バイト) まで、半角英数字の場合 1024文字 まで登録出来ます。
+          <br>タイプでAccountを選択した場合、デフォルトはアクティブアカウントが設定されています。
+          <br>任意のアカウント(アドレス)を入力する事も出来ます。その場合はそのアカウントが署名する事でメタデータが登録出来ます。
+        </div>
+      </div>
+    </div>
+    <div class="black-background_Meta" id="js-black-bg_Meta"></div>
+  </div>
+
+
+  <!-- ------- popup aggregate ---------------->
+
+  <div id="js-popup_agg" class="popup_agg">
+    <div class="popup_agg-inner">
+      <div class="close-btn" id="js-close-btn_agg"><i class="fas fa-times"></i></div>
+      <div class="Form_agg">
+        <h4>Aggregate Tx</h4>
+
+        <div class="Form-Item_agg">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_agg">モザイク</span></br></p>
+          <div class="Form-Item-Input_agg" style="text-align: center">
+            <div class="mosaic_ID2"></div> <!--   セレクトボックス     -->
+          </div>
+        </div>
+
+        <div id="hoyu-ryo_agg" style="text-align: right;color: blue"></div>
+        <div id="kigen-gire_agg" style="text-align: right;color: red"></div>
+
+        <div class="Form-Item_agg">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_agg">数　量</span></br></p>
+          <input type="text" class="Form-Item-Input_agg" id="form-amount2" />
+        </div>
+
+        <div class="Form-Item_agg">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_agg">メッセージ</span></br></p>
+          <input type="text" class="Form-Item-Input_agg" id="form-message2" />
+        </div>
+
+        <br>
+        <div class="Form-Item_agg">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_agg">Address エラーチェック</span></br></p>
+          <div class="toggle6">
+            <input type="checkbox" name="check6" value="csv_check_agg" id="csv_check_agg" />
+          </div>
+        </div>
+
+        <div class="Form-Item_agg">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_agg">CSVファイルを選択</span></p>
+          <label class="Address_List">
+            <input type="file" id="upload-file_agg">Address List (.csv)
+            <!-- address ファイルを選択 -->
+          </label>
+          <div style="display: inline-block; _display: inline;">
+            <p1>　選択されていません</p1>
+          </div>
+          <div id="kurukuru_agg"></div>
+        </div>
+        <br>
+        <!-- <p2 id="address_list" style="overflow-wrap: break-word"></p2> -->
+
+        <input type="button" onclick="handleSSS_agg();" class="Form-Btn" id="js-popup_agg" value="一括送信" />
+        <br>
+        <div style="text-align:center">fee Multiprier = 100</div>
+        <div id="agg_fee1" style="text-align:right"></div>
+        <br>
+        <br>
+        <br>
+        <p style="text-align:center">
+          ~~~~~~~~~　　csvファイルの例　　~~~~~~~~~<br><br>
+          <img src="src/agg_csv.png">
+          <br><br><a href="https://www.microsoft.com/ja-jp/microsoft-365/excel"
+            target="_blank">Excel</a>を開き、A列に<b>任意のラベル</b>、B列に<b>アドレス</b>、または<b>ネームスペース</b>を入力して<br>CSVファイルを「UTF-8(コンマ区切り)(.csv)」で作成してください。
+          <br>
+          <br>C列に<b>数量</b>、D列に<b>モザイクID</b>、E列に<b>メッセージ</b>を個別に設定する事も出来ます。
+          <br>1つのファイルに登録出来るのは100件までです。
+          <br>
+          <br>"," (カンマ) が含まれているとエラーになるので使用しないでください。
+          <br>アカウント制限があるアドレスが含まれていると、一括送信がエラーになる場合があります。
+
+        </p>
+      </div>
+    </div>
+    <div class="black-background_agg" id="js-black-bg_agg"></div>
+  </div>
+
+  <!-- ------- popup accountInfo ---------------->
+
+  <div id="js-popup_aInfo" class="popup_aInfo">
+    <div class="popup_aInfo-inner">
+      <div class="close-btn" id="js-close-btn_aInfo"><i class="fas fa-times"></i></div>
+      <div class="Form_aInfo">
+        <h4>Account Info</h4>
+        <div class="Form-Item_aInfo">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_aInfo">アドレス</span></p>
+          <div type="text" class="Form-Item-Input_aInfo" id="aInfo-addr"></div>
+        </div>
+        <div class="Form-Item_aInfo">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_aInfo">公開鍵</span></p>
+          <div type="text" class="Form-Item-Input_aInfo" id="aInfo-pubkey"></div>
+        </div>
+        <div class="Form-Item_aInfo">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_aInfo">インポータンス</span></p>
+          <div type="text" class="Form-Item-Input_aInfo" id="importance"></div>
+        </div>
+
+        <h4>🌾 Harvesting 🌾</h4>
+        <div id=hv_status style="text-align: center;font-size: 20px"></div>
+        <br>
+        <div id=hv_node style="text-align: center;font-size: 20px"></div>
+        <div class="container">
+          <div class="card mt-3 mb-3">
+            <div class="card-body">
+              <div style="text-align: right"><button type=“button” class="btn-gradient-radius"
+                  onclick="window.open('https://symbol-tools.com/symbolTools/view/tool/nodeList.html')">ノードリスト</button>
+              </div>
+              <div class="mb-3">
+                <label for="node" class="form-label">委任するノードを入力してください</label>
+                <input type="text" class="form-control" id="node" placeholder="例）symbol-mikun.net　　　（HTTPSノードのみ）">
+                <!--  <div class="alert alert-primary mt-3" role="alert">
+               <div id="tx"></div>
+            </div> -->
+                <br>
+                <div class="d-grid gap-2 col-6 mx-auto mt-3">
+                  <div style="text-align: center;"><button class="btn btn-primary" id="txBtn"
+                      type="button">ハーベスト開始　/　ノード変更 </button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
+          crossorigin="anonymous"></script>
+        <br>
+        <table id="harvest" class="table" style="width:45%;margin: auto;text-align: center">
+          <thead>
+            <tr>
+              <th>日時</th>
+              <th>区分</th>
+              <th>数量</th>
+            </tr>
+          </thead>
+        </table>
+        <br>
+        <dl>
+          <dd id="harvests_footer" style="text-align: center"><a id="harvests_more"
+              href="javascript:void(0)">さらに読み込む</a></dd>
+        </dl>
+      </div>
+    </div>
+    <div class="black-background_aInfo" id="js-black-bg_aInfo"></div>
+
+  </div>
+
+
+  <!-- ------- popup donation ---------------->
+
+  <div id="js-popup_dona" class="popup_dona">
+    <div class="popup_dona-inner">
+      <div class="close-btn" id="js-close-btn_dona"><i class="fas fa-times"></i></div>
+      <div class="Form_dona">
+        <h4>開発者へ寄付</h4>
+        <div style="text-align: center">NBOGLHXSI7FDRAO2CMZV5PQZ5UHZ3IED67ULPSY</div>
+        <br>
+        <div class="Form-Item_dona">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_dona">XYM 数量</span></br></p>
+          <input type="text" class="Form-Item-Input_dona" id="dona_amount" />
+        </div>
+        <div class="Form-Item_dona">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_dona">メッセージ</span></br></p>
+          <input type="text" class="Form-Item-Input_dona" id="dona_message" />
+        </div>
+        <div class="Form-Item_dona">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_dona">トランザクション手数料</span></br></p>
+          <!-- <input type="text" class="Form-Item-Input_r" id="re_maxFee"/>  -->
+          <div class="Form-Item-Input" style="text-align: center">
+            <select class="re_maxFee" id="dona_maxFee">
+              <option value="0.02">0.02 xym (slow)</option>
+              <option value="0.04">0.04 xym</option>
+              <option value="0.07">0.07 xym</option>
+              <option value="0.1">0.1 xym (fast)</option>
+            </select>
+          </div>
+        </div>
+        <input type="button" onclick="handleSSS_dona();" class="Form-Btn" id="js-popup_dona" value="送信" />
+
+      </div>
+    </div>
+    <div class="black-background_dona" id="js-black-bg_dona"></div>
+  </div>
+
+  <!--    popup  Multisig Account 作成   ------------------------------------>
+  <div id="js-popup_Msig" class="popup_Msig">
+    <div class="popup_Msig-inner">
+      <div class="close-btn" id="js-close-btn_Msig"><i class="fas fa-times"></i></div>
+      <div class="Form_Msig">
+        <h4>Multisig Account</h4>
+
+        <div class="Form-Item_Msig">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Msig">変換されるアカウント</span></br></p>
+          <div class="Form-Item-Input_Msig" style="text-align: center">
+            <div class="multisig_address_select_2"></div>
+          </div>
+        </div>
+        <div id="default_account" style="text-align: center;font-size: 20px;"></div>
+        <br>
+        <div id="rensyosya" style="text-align: left"></div>
+        <div id="display-container"></div>
+
+        <br>
+        <div class="Form-Item_Msig">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Msig">追加する連署者</span></p>
+          <div class="Form-Item-Input_Msig" style="text-align: center">
+
+            <div id="input-container">
+              <input type="text" id="input-text" class="input-container1" placeholder="　　　address  or  publicKey">
+              <button id="add-button" class="input-container2">➕</button>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="Form-Item_Msig">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Msig">最小　承認者数</span></p>
+          <div class="Form-Item-Input_Msig" style="text-align: center">
+            <select class="msig_min_del" id="min_sig">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+              <option value="11">11</option>
+              <option value="12">12</option>
+              <option value="13">13</option>
+              <option value="14">14</option>
+              <option value="15">15</option>
+              <option value="16">16</option>
+              <option value="17">17</option>
+              <option value="18">18</option>
+              <option value="19">19</option>
+              <option value="20">20</option>
+              <option value="21">21</option>
+              <option value="22">22</option>
+              <option value="23">23</option>
+              <option value="24">24</option>
+              <option value="25">25</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="Form-Item_Msig">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Msig">最小削除　承認者数</span></p>
+          <div class="Form-Item-Input_Msig" style="text-align: center">
+            <select class="msig_min_del" id="min_del_sig">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+              <option value="11">11</option>
+              <option value="12">12</option>
+              <option value="13">13</option>
+              <option value="14">14</option>
+              <option value="15">15</option>
+              <option value="16">16</option>
+              <option value="17">17</option>
+              <option value="18">18</option>
+              <option value="19">19</option>
+              <option value="20">20</option>
+              <option value="21">21</option>
+              <option value="22">22</option>
+              <option value="23">23</option>
+              <option value="24">24</option>
+              <option value="25">25</option>
+            </select>
+          </div>
+        </div>
+
+
+        <br>
+        <input type="button" onclick="Msig_account();" class="Form-Btn" id="js-popup_Msig" value="送信" />
+
+        <br>
+        <div style="text-align:center">fee Multiprier = 100</div>
+        <br>
+        <br>
+        <div style="text-align:center;color:darkorange">テストネットの環境でマルチシグアカウント作成の動作確認をしてから、<br>メインネットで作業する事をオススメします。</div>
+
+      </div>
+    </div>
+    <div class="black-background_Msig" id="js-black-bg_Msig"></div>
+  </div>
+
+  <!-- ------- popup multisig 送信 ---------------->
+
+  <div id="js-popup_multisig" class="popup_multisig">
+    <div class="popup_multisig-inner">
+      <div class="close-btn" id="js-close-btn_multisig"><i class="fas fa-times"></i></div>
+      <div class="Form_multisig">
+        <h4>マルチシグアカウントからの送信</h4>
+        <br>
+        <div class="Form-Item_multisig_1">
+          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_multisig">マルチシグアカウント</span></br></p>
+          <div class="Form-Item-Input_multisig" style="text-align: center">
+            <div class="multisig_address_select"></div>
+          </div>
+        </div>
+        <br>
+        <br>
+
+        <div class="container-multisig">
+          <div class="Form-Item_multisig">
+            <p class="Form-Item-Label"><span class="Form-Item-Label-Required_multisig">宛先</span></br></p>
+            <input type="text" class="Form-Item-Input_multisig" id="multisig_to" />
+          </div>
+          <div class="Form-Item_multisig">
+            <p class="Form-Item-Label"><span class="Form-Item-Label-Required_multisig">モザイク</span></br></p>
+            <div class="Form-Item-Input_multisig" style="text-align: center">
+              <div class="multisig_mosaic_select"></div>
+            </div>
+          </div>
+
+          <div id="multisig_hoyu-ryo" style="text-align: right;color: blue"></div>
+          <div id="multisig_kigen-gire" style="text-align: right;color: red"></div>
+
+          <div class="Form-Item_multisig">
+            <p class="Form-Item-Label"><span class="Form-Item-Label-Required_multisig">数量</span></br></p>
+            <input type="text" class="Form-Item-Input_multisig" id="multisig_amount" />
+          </div>
+          <div class="Form-Item_multisig">
+            <p class="Form-Item-Label"><span class="Form-Item-Label-Required_multisig">メッセージ</span></br></p>
+            <input type="text" class="Form-Item-Input_multisig" id="multisig_message2" style="height: 100px;" />
+          </div>
+
+          <br>
+          <br>
+          <div style="color:blue;text-align: center;" class="multisig_agg"><big>一括送信 (Aggregate Tx)</big></div>
+          <br>
+          <div class="Form-Item_multisig"
+            style="border-top: 3px solid rgb(0, 204, 255);border-bottom: 0px solid rgb(0, 204, 255)">
+            <p class="Form-Item-Label"><span class="Form-Item-Label-Required_multisig">Address エラーチェック</span></br></p>
+            <div class="toggle9">
+              <input type="checkbox" name="check9" value="csv_check_msig" id="csv_check_msig" />
+            </div>
+          </div>
+
+          <div class="Form-Item_multisig"
+            style="border-top: 0px solid rgb(0, 204, 255);border-bottom: 3px solid rgb(0, 204, 255)">
+            <p class="Form-Item-Label"><span class="Form-Item-Label-Required_multisig">CSVファイルを選択</span></p>
+            <label class="Address_List" style="margin-left: 0px">
+              <input type="file" id="upload-file_msig">Address List
+              <!-- address ファイルを選択 -->
+            </label>
+            <div style="display: inline-block; _display: inline;">
+              <p1>　選択されていません</p1>
+            </div>
+            <div id="kurukuru_msig"></div>
+          </div>
+
+
+        </div>
+        <br>
+        <div style="text-align:center">fee Multiprier = 100</div>
+
+
+        <input type="button" onclick="handleSSS_multisig();" class="Form-Btn" id="js-popup_multisig" value="送信" />
+        <br>
+        <br>
+        <br>
+        <div>マルチシグアカウント(最小承認数２以上)では、起案者のアカウントに <font style="color: red">「10XYM」+「トランザクション手数料」</font>の残高が必要です。
+          連署者の署名が揃うと、ロックされた「10XYM」は返却されます。48時間以内に署名が揃わない場合はネットワークに徴収されます。
+          <br>
+          <br>
+          最小承認数が１のマルチシグアカウントの場合は、起案者のアカウントに「10XYM」は不要で、トランザクション手数料分の残高が必要です。
+        </div>
+
+
+      </div>
+    </div>
+    <div class="black-background_multisig" id="js-black-bg_multisig"></div>
+  </div>
+
+  <script>
+
+    function popupImage_m() {  //  モザイク　ポップアップ
+      var popup_m = document.getElementById('js-popup_m');
+      if (!popup_m) return;
+      var blackBg = document.getElementById('js-black-bg_m');
+      var closeBtn = document.getElementById('js-close-btn_m');
+      var showBtn = document.getElementById('js-show-popup_m');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_m.classList.toggle('is-show');
+        });
+      }
+    }
+    popupImage_m();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_sup() {  //  供給量変更　ポップアップ
+      var popup_sup = document.getElementById('js-popup_sup');
+      if (!popup_sup) return;
+      var blackBg = document.getElementById('js-black-bg_sup');
+      var closeBtn = document.getElementById('js-close-btn_sup');
+      var showBtn = document.getElementById('js-show-popup_sup');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_sup.classList.toggle('is-show');
+        });
+      }
+    }
+    popupImage_sup();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_n() {  //  Namespace　ポップアップ
+      var popup_n = document.getElementById('js-popup_n');
+      if (!popup_n) return;
+      var blackBg = document.getElementById('js-black-bg_n');
+      var closeBtn = document.getElementById('js-close-btn_n');
+      var showBtn = document.getElementById('js-show-popup_n');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_n.classList.toggle('is-show');
+        });
+      }
+    }
+    popupImage_n();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_sn() {  //  subNamespace　ポップアップ
+      var popup_sn = document.getElementById('js-popup_sn');
+      if (!popup_sn) return;
+      var blackBg = document.getElementById('js-black-bg_sn');
+      var closeBtn = document.getElementById('js-close-btn_sn');
+      var showBtn = document.getElementById('js-show-popup_sn');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_sn.classList.toggle('is-show');
+        });
+      }
+    }
+    popupImage_sn();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_r() {  //  モザイク回収　ポップアップ
+      var popup_r = document.getElementById('js-popup_r');
+      if (!popup_r) return;
+      var blackBg = document.getElementById('js-black-bg_r');
+      var closeBtn = document.getElementById('js-close-btn_r');
+      var showBtn = document.getElementById('js-show-popup_r');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_r.classList.toggle('is-show');
+        });
+      }
+    }
+    popupImage_r();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_Meta() {  //  Metadata　ポップアップ
+      var popup_Meta = document.getElementById('js-popup_Meta');
+      if (!popup_Meta) return;
+      var blackBg = document.getElementById('js-black-bg_Meta');
+      var closeBtn = document.getElementById('js-close-btn_Meta');
+      var showBtn = document.getElementById('js-show-popup_Meta');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_Meta.classList.toggle('is-show');
+        });
+      }
+    }
+    popupImage_Meta();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_L() {  //  エイリアスリンク
+      var popup_L = document.getElementById('js-popup_L');
+      if (!popup_L) return;
+      var blackBg = document.getElementById('js-black-bg_L');
+      var closeBtn = document.getElementById('js-close-btn_L');
+      var showBtn = document.getElementById('js-show-popup_L');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_L.classList.toggle('is-show');
+        });
+      }
+    }
+    popupImage_L();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_agg() {  //  aggregate　ポップアップ
+      var popup_agg = document.getElementById('js-popup_agg');
+      if (!popup_agg) return;
+      var blackBg = document.getElementById('js-black-bg_agg');
+      var closeBtn = document.getElementById('js-close-btn_agg');
+      var showBtn = document.getElementById('js-show-popup_agg');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_agg.classList.toggle('is-show');
+        });
+      }
+    }
+    popupImage_agg();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_aInfo() {  //  accountInfo　ポップアップ
+      var popup_aInfo = document.getElementById('js-popup_aInfo');
+      if (!popup_aInfo) return;
+      var blackBg = document.getElementById('js-black-bg_aInfo');
+      var closeBtn = document.getElementById('js-close-btn_aInfo');
+      var showBtn = document.getElementById('js-show-popup_aInfo');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_aInfo.classList.toggle('is-show');
+        });
+      }
+    }
+    popupImage_aInfo();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_Msig() {  //  multisig　Account 作成 ポップアップ
+      var popup_Msig = document.getElementById('js-popup_Msig');
+      if (!popup_Msig) return;
+      var blackBg = document.getElementById('js-black-bg_Msig');
+      var closeBtn = document.getElementById('js-close-btn_Msig');
+      var showBtn = document.getElementById('js-show-popup_Msig');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_Msig.classList.toggle('is-show');
+        });
+      }
+    }
+    popupImage_Msig();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_multisig() {  //  multisig　送信 ポップアップ
+      var popup_multisig = document.getElementById('js-popup_multisig');
+      if (!popup_multisig) return;
+      var blackBg = document.getElementById('js-black-bg_multisig');
+      var closeBtn = document.getElementById('js-close-btn_multisig');
+      var showBtn = document.getElementById('js-show-popup_multisig');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_multisig.classList.toggle('is-show');
+        });
+      }
+    }
+    popupImage_multisig();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_dona() {  //  donation　ポップアップ
+      var popup_dona = document.getElementById('js-popup_dona');
+      if (!popup_dona) return;
+      var blackBg = document.getElementById('js-black-bg_dona');
+      var closeBtn = document.getElementById('js-close-btn_dona');
+      var showBtn = document.getElementById('js-show-popup_dona');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_dona.classList.toggle('is-show');
+        });
+      }
+    }
+    popupImage_dona();
+
+    ////////////////////////////////////////////////
+
+    //トグルスイッチ
+    $(".toggle0").on("click", function () {            // メッセージ暗号化
+      $(".toggle0").toggleClass("checked");
+      if (!$('input[name="check0"]').prop("checked")) {
+        $(".toggle0 input").prop("checked", true);
+      } else {
+        $(".toggle0 input").prop("checked", false);
+      }
+    });
+    $(".toggle1").on("click", function () {            // 供給量可変
+      $(".toggle1").toggleClass("checked");
+      if (!$('input[name="check1"]').prop("checked")) {
+        $(".toggle1 input").prop("checked", true);
+      } else {
+        $(".toggle1 input").prop("checked", false);
+      }
+    });
+    $(".toggle2").on("click", function () {              // 転送可
+      $(".toggle2").toggleClass("checked");
+      if (!$('input[name="check2"]').prop("checked")) {
+        $(".toggle2 input").prop("checked", true);
+      } else {
+        $(".toggle2 input").prop("checked", false);
+      }
+    });
+    $(".toggle3").on("click", function () {              // 制限可
+      $(".toggle3").toggleClass("checked");
+      if (!$('input[name="check3"]').prop("checked")) {
+        $(".toggle3 input").prop("checked", true);
+      } else {
+        $(".toggle3 input").prop("checked", false);
+      }
+    });
+    $(".toggle4").on("click", function () {              // 回収可
+      $(".toggle4").toggleClass("checked");
+      if (!$('input[name="check4"]').prop("checked")) {
+        $(".toggle4 input").prop("checked", true);
+      } else {
+        $(".toggle4 input").prop("checked", false);
+      }
+    });
+    $(".toggle5").on("click", function () {            // モザイク供給量変更
+      $(".toggle5").toggleClass("checked");
+      if (!$('input[name="check5"]').prop("checked")) {
+        $(".toggle5 input").prop("checked", true);
+      } else {
+        $(".toggle5 input").prop("checked", false);
+      }
+    });
+
+    $(".toggle6").toggleClass("checked");     // 初期値はON にする　　　aggregete 一括送信　アドレスチェック
+    if (!$('input[name="check6"]').prop("checked")) {
+      $(".toggle6 input").prop("checked", true);
+    } else {
+      $(".toggle6 input").prop("checked", false);
+    }
+    $(".toggle6").on("click", function () {
+      $(".toggle6").toggleClass("checked");
+      if (!$('input[name="check6"]').prop("checked")) {
+        $(".toggle6 input").prop("checked", true);
+      } else {
+        $(".toggle6 input").prop("checked", false);
+      }
+    });
+
+    $(".toggle7").on("click", function () {      //  まとめて回収
+      $(".toggle7").toggleClass("checked");
+      if (!$('input[name="check7"]').prop("checked")) {
+        $(".toggle7 input").prop("checked", true);
+      } else {
+        $(".toggle7 input").prop("checked", false);
+      }
+    });
+
+
+    $(".toggle8").toggleClass("checked");     // 初期値はON にする          ファイルで指定して回収
+    if (!$('input[name="check8"]').prop("checked")) {
+      $(".toggle8 input").prop("checked", true);
+    } else {
+      $(".toggle8 input").prop("checked", false);
+    }
+    $(".toggle8").on("click", function () {
+      $(".toggle8").toggleClass("checked");
+      if (!$('input[name="check8"]').prop("checked")) {
+        $(".toggle8 input").prop("checked", true);
+      } else {
+        $(".toggle8 input").prop("checked", false);
+      }
+    });
+
+    $(".toggle9").toggleClass("checked");     // 初期値はON にする       multisigアカウントからの送信  一括送信
+    if (!$('input[name="check9"]').prop("checked")) {
+      $(".toggle9 input").prop("checked", true);
+    } else {
+      $(".toggle9 input").prop("checked", false);
+    }
+    $(".toggle9").on("click", function () {
+      $(".toggle9").toggleClass("checked");
+      if (!$('input[name="check9"]').prop("checked")) {
+        $(".toggle9 input").prop("checked", true);
+      } else {
+        $(".toggle9 input").prop("checked", false);
+      }
+    });
+
+    ////////////////////////////////////////////////
+    //  jQuery ページネーションプラグイン
+    ////////////////////////////////////////////////
+
+    /* $(function() {
+        $("Meta_table").pagination({
+            items: 100,
+            itemsOnPage: 10,
+            cssStyle: 'light-theme'
+        });
+    }); */
+
+    ////////////////////////////////////////////////
+    // クルクル回るgif を表示
+    ////////////////////////////////////////////////
+    /* ------------------------------
+     表示用の関数
+     ------------------------------ */
+    function dispLoading_agg(msg) {  // 一括送信用  ------------------
+      // 引数なしの場合、メッセージは非表示。
+      if (msg === undefined) msg = "";
+
+      // 画面表示メッセージを埋め込み
+      var innerMsg = "<div id='innerMsg_agg'>" + msg + "</div>";
+
+      // ローディング画像が非表示かどうかチェックし、非表示の場合のみ出力。
+      if ($("#nowLoading").length == 0) {
+        $("#kurukuru_agg").append("<div id='nowLoading'>" + innerMsg + "</div>");
+      }
+    }
+
+    function dispLoading_msig(msg) {  // msig 一括送信用  ---------------
+      // 引数なしの場合、メッセージは非表示。
+      if (msg === undefined) msg = "";
+
+      // 画面表示メッセージを埋め込み
+      var innerMsg = "<div id='innerMsg_msig'>" + msg + "</div>";
+
+      // ローディング画像が非表示かどうかチェックし、非表示の場合のみ出力。
+      if ($("#nowLoading").length == 0) {
+        $("#kurukuru_msig").append("<div id='nowLoading'>" + innerMsg + "</div>");
+      }
+    }
+
+    function dispLoading_re(msg) {    // 回収モザイク用  -----------------
+      // 引数なしの場合、メッセージは非表示。
+      if (msg === undefined) msg = "";
+
+      // 画面表示メッセージを埋め込み
+      var innerMsg = "<div id='innerMsg_re'>" + msg + "</div>";
+
+      // ローディング画像が非表示かどうかチェックし、非表示の場合のみ出力。
+      if ($("#nowLoading").length == 0) {
+        $("#kurukuru_re").append("<div id='nowLoading'>" + innerMsg + "</div>");
+      }
+    }
+
+    /* ------------------------------
+     表示ストップ用の関数
+     ------------------------------ */
+    function removeLoading() {  // 一括送信用
+      $("#nowLoading").remove();
+    }
+
+    /*  function removeLoading_re() {  // 回収モザイク用
+        $("#nowLoading_re").remove();
+      }  */
+
+
+  </script>
+
+  <!-- <script type="text/javascript" src="https://xembook.github.io/nem2-browserify/symbol-sdk-pack-2.0.5.js"></script> -->
+  <script type="text/javascript" src="https://mikunnem.github.io/symbol-browserify/symbol-sdk-pack-2.0.6.js"></script>
+  <script type="text/javascript" src="https://xembook.github.io/symbol-browserify/metal-on-symbol-0.2.2.js"></script>
+  <!-- SweetAlert2 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <!-- <script type="text/javascript" src="./js/jquery.simplePagination.js"></script> -->
+
+  <script type="text/javascript" src="script.js"></script>
+
+  <script>
+    // aggregate送信用ファイルを読み込み　エラーチェック　  //  3つが同じ冗長なコードになっているので、出来れば一つに纏めたい。
+    const input_agg = document.getElementById("upload-file_agg");    // aggregate
+    const input_msig = document.getElementById("upload-file_msig");  // multisig
+    const input_re = document.getElementById("upload-file_re");      // モザイク回収
+
+
+    //FileReaderの定義
+    const reader = new FileReader();
+    let address1 = [];
+    let address2 = [];
+    let amount1 = [];
+    let mosaic1 = [];
+    let message1 = [];
+    let file;
+    let file1;
+    // 選択したファイルのファイル名を出力する
+    $('input').on('change', function () {
+      let file = $(this).prop('files')[0];
+      $('p1').text(file.name);
+      address1.length = 0;
+      address2.length = 0;
+      csv_check_agg = document.getElementById("csv_check_agg").checked;  // csvファイルチェックのフラグ
+      csv_check_msig = document.getElementById("csv_check_msig").checked;  // csvファイルチェックのフラグ
+      csv_check_re = document.getElementById("csv_check_re").checked;  // csvファイルチェックのフラグ
+
+      console.log("csv_check_agg ====", csv_check_agg);
+      console.log("csv_check_msig ====", csv_check_msig);
+      console.log("csv_check_re ====", csv_check_re);
+    });
+
+    /////////////////////////// input_agg に変化があった場合 ////////////////////////////////////////////////////////////////////////////
+
+    input_agg.addEventListener('change', (e) => {
+      file1 = e.target.files[0];
+      console.log("%cfile1===", "color: red", file1);
+      if (typeof file1 === "undefined") {
+        address1.length = 0;
+        address2.length = 0; // ファイル選択が取り消された場合、配列を削除
+        $('p1').text("選択されていません");
+        //$('p2').text(""); // address_list 非表示
+        file = file1;
+      }
+
+      //ファイルの種類を絞る
+      if (file1.type === 'text/csv') {
+        reader.onload = () => {
+
+          address2 = reader.result.split(/\r\n|\n/);   //splitで改行ごとに配列化
+          console.log("address2===============", address2);
+
+          if (address2[address2.length - 1] === "") {  // 改行の後 "" が最後の配列にある場合
+            address2.pop();  //最後の配列要素を削除
+          }
+
+          (async () => {
+            console.log("CSV_agg チェック =========", csv_check_agg);
+            if (csv_check_agg === true) {
+              //$('p2').text(""); // address_list 非表示
+              dispLoading_agg(`Address にエラーが無いかチェックしています...`); //  ローディング画像表示
+              for (let i = 0; i < address2.length; ++i) {
+                let cells = address2[i].split(",");    //カンマごとに配列化 (名前とアドレスを分ける)
+                address1[i] = cells[1];                //アドレスだけを格納
+
+                console.log("cells[2]===================", cells[2]);
+                if (cells[2] !== undefined) {               //３列目がある場合
+                  amount1[i] = cells[2];
+                  if (cells[2] === "") {
+                    amount1[i] = "0";
+                  }
+                }
+                if (cells[3] !== undefined) {              // 4列目がある場合
+                  mosaic1[i] = cells[3];
+                }
+                if (cells[4] !== undefined) {              // 5列目がある場合
+                  message1[i] = cells[4];
+                  if (byteLengthUTF8(cells[4]) > 1023) {
+                    Swal.fire(`[${i + 1}行目]  メッセージのサイズが${byteLengthUTF8(cells[4])}バイトです!!          
+                   1023バイト 以下にしてください。`);
+                    return;
+                  }
+                }
+                // 余分なハイフンやスペースを削除
+                if (address1[i].length === 45) {                 //ハイフン有りのアドレスの場合
+                  address1[i] = address1[i].replace(/-/g, "");  // ハイフンを削除する
+                }
+                address1[i] = address1[i].replace(/ /g, "");  // スペース削除
+                address1[i] = address1[i].replace(/　/g, ""); //　スペース削除
+                address1[i] = address1[i].replace(/\r?\n|\r/g, ""); //　改行削除
+
+                console.log(`address[${i}]============`, address1[i]);
+
+                if (address1[i].length !== 39) {  // 39文字以外の処理
+                  const namespaceId = new sym.NamespaceId(address1[i].toLowerCase());
+                  const ns_check = await nsRepo.getLinkedAddress(namespaceId)
+                    .toPromise()
+                    .catch(() => Swal.fire(`Namespace or Address Error!!`, `[No.${i + 1}]
+
+                             ${address1[i]}`));
+
+                  console.log(`%cns_check[${i}]`, "color: red", ns_check);
+                  if (ns_check !== true) { // Namespace がリンクされている場合
+                    address1[i] = ns_check.address;   // Namspace をアドレスに変更
+                  }
+                }
+              }
+
+              const res1 = [];
+              for (let i = 0; i < address1.length; ++i) {
+                if (address1[i].length === 39) {  // 39文字の場合
+                  if (address1[i].charAt(0) === "N" || address1[i].charAt(0) === "T") {
+                    const account_check = await accountRepo.getAccountInfo(sym.Address.createFromRawAddress(address1[i]))
+                      .toPromise()
+                      .catch(() => Swal.fire(`Address Error!!`, `
+                          ネットワークに認識されていないアドレスです
+
+                          [No.${i + 1}]
+                           
+                          ${address1[i]}
+
+                          
+                          ※トランザクション履歴のないアドレスはネットワークに認識されていませんが、送信は可能です`));                                                   // アドレス　有無のチェック
+
+                    alice = sym.Address.createFromRawAddress(address1[i]);                //アカウント制限チェック
+                    res = await resAccountRepo.getAccountRestrictions(alice)
+                      .toPromise()
+                      .catch(() => console.log(`制限無し[${i + 1}]`));
+
+                    if (res !== undefined) {
+                      res1.push(`[No.${i + 1}]
+                                ${res.address.address}
+
+                                `);
+                      Swal.fire(`アカウント制限有り`, `${res1}`);
+
+                      for (j = 0; j < res.restrictions.length; ++j) {
+                        console.log(`restrictions[${i}][${j}]`, res.restrictions[j]);
+                      }
+                    }
+
+                  } else { //先頭が NまたはTでない場合
+                    Swal.fire(`Address Error!!`, `[No.${i + 1}]
+
+                        ${address1[i]}`);        // アドレス　有無のチェック
+                  }
+                }
+              }
+              removeLoading();  //  ローディング画像を非表示
+              Swal.fire(`アドレスチェック完了！`, "");
+            } else {    // エラーチェックしない
+              for (let i = 0; i < address2.length; ++i) {
+                let cells = address2[i].split(",");    //カンマごとに配列化 (名前とアドレスを分ける)
+                address1[i] = cells[1];                //アドレスだけを格納
+                if (cells[2] !== undefined) {               //３列目がある場合
+                  amount1[i] = cells[2];
+                  if (cells[2] === "") {
+                    amount1[i] = "0";
+                  }
+                }
+                if (cells[3] !== undefined) {              // 4列目がある場合
+                  mosaic1[i] = cells[3];
+                }
+                if (cells[4] !== undefined) {              // 5列目がある場合
+                  message1[i] = cells[4];
+                  if (byteLengthUTF8(cells[4]) > 1023) {
+                    Swal.fire(`[${i + 1}行目]  メッセージのサイズが${byteLengthUTF8(cells[4])}バイトです!!          
+                   1023バイト 以下にしてください。`);
+                    return;
+                  }
+                }
+                // 余分なハイフンやスペースを削除
+                if (address1[i].length === 45) {                 //ハイフン有りのアドレスの場合
+                  address1[i] = address1[i].replace(/-/g, "");  // ハイフンを削除する
+                }
+                address1[i] = address1[i].replace(/ /g, "");  // スペース削除
+                address1[i] = address1[i].replace(/　/g, ""); //　スペース削除
+                address1[i] = address1[i].replace(/\r?\n|\r/g, ""); //　改行削除
+
+              }
+              //const address_list = document.getElementById("address_list");
+              //address_list.innerHTML= `${address1}`;
+            }
+
+
+          })(); // async()
+
+          console.log("address1=", address1);
+          console.log("amount1=", amount1);
+          console.log("mosaic1=", mosaic1);
+          console.log("message1=", message1);
+        }
+        reader.readAsText(file1);
+      }
+    });
+
+    /////////////////////////// input_msig に変化があった場合 ////////////////////////////////////////////////////////////////////////////
+
+    input_msig.addEventListener('change', (e) => {
+      file1 = e.target.files[0];
+      console.log("%cfile1===", "color: red", file1);
+      if (typeof file1 === "undefined") {
+        address1.length = 0;
+        address2.length = 0; // ファイル選択が取り消された場合、配列を削除
+        $('p1').text("選択されていません");
+        //$('p2').text(""); // address_list 非表示
+        file = file1;
+      }
+
+      //ファイルの種類を絞る
+      if (file1.type === 'text/csv') {
+        reader.onload = () => {
+
+          address2 = reader.result.split(/\r\n|\n/);   //splitで改行ごとに配列化
+          console.log("address2===============", address2);
+
+          if (address2[address2.length - 1] === "") {  // 改行の後 "" が最後の配列にある場合
+            address2.pop();  //最後の配列要素を削除
+          }
+
+          (async () => {
+            console.log("CSV_msig チェック =========", csv_check_msig);
+            if (csv_check_msig === true) {
+              //$('p2').text(""); // address_list 非表示
+              dispLoading_msig(`Address にエラーが無いかチェックしています...`); //  ローディング画像表示
+              for (let i = 0; i < address2.length; ++i) {
+                let cells = address2[i].split(",");    //カンマごとに配列化 (名前とアドレスを分ける)
+                address1[i] = cells[1];                //アドレスだけを格納
+
+                console.log("cells[2]===================", cells[2]);
+                if (cells[2] !== undefined) {               //３列目がある場合
+                  amount1[i] = cells[2];
+                  if (cells[2] === "") {
+                    amount1[i] = "0";
+                  }
+                }
+                if (cells[3] !== undefined) {              // 4列目がある場合
+                  mosaic1[i] = cells[3];
+                }
+                if (cells[4] !== undefined) {              // 5列目がある場合
+                  message1[i] = cells[4];
+                  if (byteLengthUTF8(cells[4]) > 1023) {
+                    Swal.fire(`[${i + 1}行目]  メッセージのサイズが${byteLengthUTF8(cells[4])}バイトです!!          
+                   1023バイト 以下にしてください。`);
+                    return;
+                  }
+                }
+                // 余分なハイフンやスペースを削除
+                if (address1[i].length === 45) {                 //ハイフン有りのアドレスの場合
+                  address1[i] = address1[i].replace(/-/g, "");  // ハイフンを削除する
+                }
+                address1[i] = address1[i].replace(/ /g, "");  // スペース削除
+                address1[i] = address1[i].replace(/　/g, ""); //　スペース削除
+                address1[i] = address1[i].replace(/\r?\n|\r/g, ""); //　改行削除
+
+                console.log(`address[${i}]============`, address1[i]);
+
+                if (address1[i].length !== 39) {  // 39文字以外の処理
+                  const namespaceId = new sym.NamespaceId(address1[i].toLowerCase());
+                  const ns_check = await nsRepo.getLinkedAddress(namespaceId)
+                    .toPromise()
+                    .catch(() => Swal.fire(`Namespace or Address Error!!`, `[No.${i + 1}]
+
+                             ${address1[i]}`));
+
+                  console.log(`%cns_check[${i}]`, "color: red", ns_check);
+                  if (ns_check !== true) { // Namespace がリンクされている場合
+                    address1[i] = ns_check.address;   // Namspace をアドレスに変更
+                  }
+                }
+              }
+
+              const res1 = [];
+              for (let i = 0; i < address1.length; ++i) {
+                if (address1[i].length === 39) {  // 39文字の場合
+                  if (address1[i].charAt(0) === "N" || address1[i].charAt(0) === "T") {
+                    const account_check = await accountRepo.getAccountInfo(sym.Address.createFromRawAddress(address1[i]))
+                      .toPromise()
+                      .catch(() => Swal.fire(`Address Error!!`, `
+                          ネットワークに認識されていないアドレスです
+
+                          [No.${i + 1}]
+                           
+                          ${address1[i]}
+
+                          
+                          ※トランザクション履歴のないアドレスはネットワークに認識されていませんが、送信は可能です`));                                                   // アドレス　有無のチェック
+
+                    alice = sym.Address.createFromRawAddress(address1[i]);                //アカウント制限チェック
+                    res = await resAccountRepo.getAccountRestrictions(alice)
+                      .toPromise()
+                      .catch(() => console.log(`制限無し[${i + 1}]`));
+
+                    if (res !== undefined) {
+                      res1.push(`[No.${i + 1}]
+                                ${res.address.address}
+
+                                `);
+                      Swal.fire(`アカウント制限有り`, `${res1}`);
+
+                      for (j = 0; j < res.restrictions.length; ++j) {
+                        console.log(`restrictions[${i}][${j}]`, res.restrictions[j]);
+                      }
+                    }
+
+                  } else { //先頭が NまたはTでない場合
+                    Swal.fire(`Address Error!!`, `[No.${i + 1}]
+
+                        ${address1[i]}`);        // アドレス　有無のチェック
+                  }
+                }
+              }
+              removeLoading();  //  ローディング画像を非表示
+              Swal.fire(`アドレスチェック完了！`, "");
+            } else {    // エラーチェックしない
+              for (let i = 0; i < address2.length; ++i) {
+                let cells = address2[i].split(",");    //カンマごとに配列化 (名前とアドレスを分ける)
+                address1[i] = cells[1];                //アドレスだけを格納
+                if (cells[2] !== undefined) {               //３列目がある場合
+                  amount1[i] = cells[2];
+                  if (cells[2] === "") {
+                    amount1[i] = "0";
+                  }
+                }
+                if (cells[3] !== undefined) {              // 4列目がある場合
+                  mosaic1[i] = cells[3];
+                }
+                if (cells[4] !== undefined) {              // 5列目がある場合
+                  message1[i] = cells[4];
+                  if (byteLengthUTF8(cells[4]) > 1023) {
+                    Swal.fire(`[${i + 1}行目]  メッセージのサイズが${byteLengthUTF8(cells[4])}バイトです!!          
+                   1023バイト 以下にしてください。`);
+                    return;
+                  }
+                }
+                // 余分なハイフンやスペースを削除
+                if (address1[i].length === 45) {                 //ハイフン有りのアドレスの場合
+                  address1[i] = address1[i].replace(/-/g, "");  // ハイフンを削除する
+                }
+                address1[i] = address1[i].replace(/ /g, "");  // スペース削除
+                address1[i] = address1[i].replace(/　/g, ""); //　スペース削除
+                address1[i] = address1[i].replace(/\r?\n|\r/g, ""); //　改行削除
+
+              }
+              //const address_list = document.getElementById("address_list");
+              //address_list.innerHTML= `${address1}`;
+            }
+
+
+          })(); // async()
+
+          console.log("address1=", address1);
+          console.log("amount1=", amount1);
+          console.log("mosaic1=", mosaic1);
+          console.log("message1=", message1);
+        }
+        reader.readAsText(file1);
+      }
+    });
+
+    /////////////////////////// input_re に変化があった場合 ////////////////////////////////////////////////////////////////////////////
+
+    input_re.addEventListener('change', (e) => {
+      file1 = e.target.files[0];
+      console.log("%cfile1===", "color: red", file1);
+      if (typeof file1 === "undefined") {
+        address1.length = 0;
+        address2.length = 0; // ファイル選択が取り消された場合、配列を削除
+        $('p1').text("選択されていません");
+        //$('p2').text(""); // address_list 非表示
+        file = file1;
+      }
+
+      //ファイルの種類を絞る
+      if (file1.type === 'text/csv') {
+        reader.onload = () => {
+          address2 = reader.result.split(/\r\n|\n/);   //splitで改行ごとに配列化
+
+          if (address2[address2.length - 1] === "") {  // 改行の後 "" が最後の配列にある場合
+            address2.pop();  //最後の配列要素を削除
+          }
+
+          (async () => {
+            console.log("CSV_re チェック =========", csv_check_re);
+            if (csv_check_re === true) {
+              //$('p2').text(""); // address_list 非表示
+              dispLoading_re(`Address にエラーが無いかチェックしています...`); //  ローディング画像表示
+              for (let i = 0; i < address2.length; ++i) {
+                let cells = address2[i].split(",");    //カンマごとに配列化 (名前とアドレスを分ける)
+                address1[i] = cells[1];                //アドレスだけを格納
+                if (cells[2] !== undefined) {               //３列目がある場合
+                  amount1[i] = cells[2];
+                  if (cells[2] === "") {
+                    amount1[i] = "0";
+                  }
+                }
+                if (cells[3] !== undefined) {              // 4列目がある場合
+                  mosaic1[i] = cells[3];
+                }
+                if (cells[4] !== undefined) {              // 5列目がある場合
+                  message1[i] = cells[4];
+                  if (byteLengthUTF8(cells[4]) > 1023) {
+                    Swal.fire(`[${i + 1}行目]  メッセージのサイズが${byteLengthUTF8(cells[4])}バイトです!!          
+                   1023バイト 以下にしてください。`);
+                    return;
+                  }
+                }
+                // 余分なハイフンやスペースを削除
+                if (address1[i].length === 45) {                 //ハイフン有りのアドレスの場合
+                  address1[i] = address1[i].replace(/-/g, "");  // ハイフンを削除する
+                }
+                address1[i] = address1[i].replace(/ /g, "");  // スペース削除
+                address1[i] = address1[i].replace(/　/g, ""); //　スペース削除
+                address1[i] = address1[i].replace(/\r?\n|\r/g, ""); //　改行削除
+
+                if (address1[i].length !== 39) {  // 39文字以外の処理
+                  const namespaceId = new sym.NamespaceId(address1[i].toLowerCase());
+                  const ns_check = await nsRepo.getLinkedAddress(namespaceId)
+                    .toPromise()
+                    .catch(() => Swal.fire(`Namespace or Address Error!!`, `[No.${i + 1}]
+
+                             ${address1[i]}`));
+
+                  console.log(`%cns_check[${i}]`, "color: red", ns_check);
+                  if (ns_check !== true) { // Namespace がリンクされている場合
+                    address1[i] = ns_check.address;   // Namspace をアドレスに変更
+                  }
+                }
+              }
+
+              const res1 = [];
+              for (let i = 0; i < address1.length; ++i) {
+                if (address1[i].length === 39) {  // 39文字の場合
+                  if (address1[i].charAt(0) === "N" || address1[i].charAt(0) === "T") {
+                    const account_check = await accountRepo.getAccountInfo(sym.Address.createFromRawAddress(address1[i]))
+                      .toPromise()
+                      .catch(() => Swal.fire(`Address Error!!`, `[No.${i + 1}]
+
+                          ${address1[i]}`));                                                   // アドレス　有無のチェック
+
+                    alice = sym.Address.createFromRawAddress(address1[i]);                //アカウント制限チェック
+                    res = await resAccountRepo.getAccountRestrictions(alice)
+                      .toPromise()
+                      .catch(() => console.log(`制限無し[${i + 1}]`));
+
+                    if (res !== undefined) {
+                      res1.push(`[No.${i + 1}]
+                                ${res.address.address}
+
+                                `);
+                      Swal.fire(`アカウント制限有り`, `${res1}`);
+
+                      for (j = 0; j < res.restrictions.length; ++j) {
+                        console.log(`restrictions[${i}][${j}]`, res.restrictions[j]);
+                      }
+                    }
+
+                  } else { //先頭が NまたはTでない場合
+                    Swal.fire(`Address Error!!`, `[No.${i + 1}]
+
+                        ${address1[i]}`);        // アドレス　有無のチェック
+                  }
+                }
+              }
+              removeLoading();  //  ローディング画像を非表示
+              Swal.fire(`アドレスチェック完了！`, "");
+            } else {    // エラーチェックしない
+              for (let i = 0; i < address2.length; ++i) {
+                let cells = address2[i].split(",");    //カンマごとに配列化 (名前とアドレスを分ける)
+                address1[i] = cells[1];                //アドレスだけを格納
+                if (cells[2] !== undefined) {               //３列目がある場合
+                  amount1[i] = cells[2];
+                  if (cells[2] === "") {
+                    amount1[i] = "0";
+                  }
+                }
+                if (cells[3] !== undefined) {              // 4列目がある場合
+                  mosaic1[i] = cells[3];
+                }
+                if (cells[4] !== undefined) {              // 5列目がある場合
+                  message1[i] = cells[4];
+                  if (byteLengthUTF8(cells[4]) > 1023) {
+                    Swal.fire(`[${i + 1}行目]  メッセージのサイズが${byteLengthUTF8(cells[4])}バイトです!!          
+                   1023バイト 以下にしてください。`);
+                    return;
+                  }
+                }
+                // 余分なハイフンやスペースを削除
+                if (address1[i].length === 45) {                 //ハイフン有りのアドレスの場合
+                  address1[i] = address1[i].replace(/-/g, "");  // ハイフンを削除する
+                }
+                address1[i] = address1[i].replace(/ /g, "");  // スペース削除
+                address1[i] = address1[i].replace(/　/g, ""); //　スペース削除
+                address1[i] = address1[i].replace(/\r?\n|\r/g, ""); //　改行削除
+
+              }
+              //const address_list = document.getElementById("address_list");
+              //address_list.innerHTML= `${address1}`;
+            }
+
+
+          })(); // async()
+
+          console.log("address1=", address1);
+        }
+        reader.readAsText(file1);
+      }
+    });
+
+    /*function bytelength(s) {   //    文字列のバイト長(UTF-8)を得る
+      return encodeURI(s).replace(/%../g, "*").length;
+    }*/
+
+    function byteLengthUTF8(s) {
+      return new TextEncoder().encode(s).length;
+    }
+
+  </script>
+
+</body>
+
+</html>

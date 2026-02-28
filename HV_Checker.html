@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <title>Harvest Checker</title>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="style.css" type="text/css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="./js/jquery-3.6.3.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
+  <style>
+    /* デフォルトスタイル */
+    body {
+      background-color: rgb(255, 252, 195);
+    }
+
+    .container_hv {
+      text-align: center;
+      height: 100vh;
+      /* 画面の高さいっぱいに広げる */
+      padding-top: 100px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container_hv">
+    <h4>Harvest Checker <br><br>🌾🌾🌾🌾🌾</h4>
+    <br>
+    <input type="text" id="addr" style="font-size: 25px" placeholder="Symbolアドレスを入力" />
+    <br>
+    <br>
+    <br>
+    <br>
+    <button type="button" class="btn-gradient-radius" onclick="harvest_checker();"
+      style="font-size: 30px; cursor: pointer">START</button>
+    <br>
+    <br>
+    <div id="kurukuru_re"></div>
+
+
+    <br>
+    <div id="hv_status" style="font-size: 30px;"></div>
+    <br>
+    <div id="importance" style="font-size: 30px;font-family: 'Itim', cursive;"></div>
+    <br>
+    <div id="hv_node" style="font-size: 30px;font-family: 'Itim', cursive;"></div>
+    <br>
+    <br>
+    <br>
+    <div id="version">Powerd by SYMBOL<br><a href='https://x.com/mikunNEM'><small>@mikunNEM</small></a></div>
+
+  </div>
+
+
+  <script type="text/javascript" src="https://xembook.github.io/nem2-browserify/symbol-sdk-pack-2.0.4.js"></script>
+
+  <script>
+
+    const NODE = new Array('https://symbol.cryptobeliever.net:3001', 'https://symbol-mikun.net:3001', 'https://symbol-main-1.nemtus.com:3001', 'https://sym-main-03.opening-line.jp:3001');
+    let URL;
+
+    function harvest_checker() {
+
+      const hv_status = document.getElementById('hv_status');
+      hv_status.innerHTML = "";  // 初期化
+      const dom_importance = document.getElementById('importance');  // インポータンス表示
+      dom_importance.innerHTML = "";  // 初期化
+      const hv_node = document.getElementById('hv_node');
+      hv_node.innerHTML = "";  // 初期化
+
+      dispLoading();  // クルクル表示 
+
+      getActiveNode().then(result => {  // アクティブなノードを渡す
+        console.log("getActiveNode 戻り値 : ", result);
+        URL = result;
+
+        const sym = require('/node_modules/symbol-sdk');
+        const repo = new sym.RepositoryFactoryHttp(URL);
+        const accountRepo = repo.createAccountRepository();
+        const totalChainImportance = 78429286;                // https://symbol-mikun.net:3001/network/properties    ( "totalChainImportance":"7'842'928'625'000'000" )
+        const networkType = 104;
+
+        let addr = document.getElementById('addr').value;
+
+        addr = addr.replace(/-/g, "");  // ハイフンを削除する
+        addr = addr.replace(/ /g, "");  // スペース削除
+        addr = addr.replace(/　/g, ""); //　スペース削除     
+
+        if (addr.length !== 39) {  // アドレス文字数チェック
+          swal(`Address Error!!`, "正しい文字数は39文字です").then(() => { removeLoading() });
+          return;
+        }
+
+        if (addr.charAt(0) !== "N") {
+          swal('Address Error !!', "メインネットアドレスの先頭は「N」です").then(() => { removeLoading() });
+          return;
+        }
+
+        address = sym.Address.createFromRawAddress(addr);
+
+        accountRepo.getAccountInfo(address)
+          .toPromise()
+          .catch(() => swal(`Address Error!!`, "ネットワークに認識されていないアドレスです").then(() => { removeLoading() }))
+          .then((accountInfo) => {
+            console.log("accountInfo=", accountInfo)
+            console.log("account_Mosaics =", accountInfo.mosaics.length);
+
+            let accountImportance = Number(accountInfo.importance.toString()) / totalChainImportance;
+            if (accountImportance > 0) {
+              accountImportance = Math.round(accountImportance);
+              accountImportance /= 1000000;
+            }
+            if (accountImportance === 0) {
+              removeLoading(); // クルクル非表示
+              swal(`Importance Error!!`, "インポータンスが有りません");
+              return;
+            }
+
+            dom_importance.innerHTML = `<div style="text-align: center;padding-top: 8px"><font color="green">インポータンス<br>${accountImportance} ％</font></div>`;
+
+            let data;
+            let data2;
+            let data3;
+
+            if (accountInfo.supplementalPublicKeys.linked !== undefined) {  //  account pubkey がある場合
+              const account_linked_pubkey = accountInfo.supplementalPublicKeys.linked.publicKey;
+              //console.log("account_linked_pubkey===============",account_linked_pubkey);
+
+              if (accountInfo.supplementalPublicKeys.node !== undefined) {   //  node pubkey がある場合   （委任先のノードオーナーのアカウントではない場合）
+                const node_pubkey = accountInfo.supplementalPublicKeys.node.publicKey;
+                //console.log("node_pubkey===============",node_pubkey);
+
+                console.log(" ==== 委任アカウント ====");
+
+                fetch(`https://symbol.services/nodes/nodePublicKey/${node_pubkey}`) // static services から　node publicKey 情報を取得                     
+                  .then((response) => {
+                    if (!response.ok) {
+                      swal(`Fetch Error!!`, `https://symbol.services/nodes/nodePublicKey/${node_pubkey}
+                   
+                   * nodePublicKey が見つかりません
+                   
+                   委任先ノードが停止しているか、モバイルノード(peer node は未対応)のため検索出来ません`);
+                      removeLoading(); // クルクル非表示  
+                      throw new Error(`Network response was not ok: ${response.status}`);
+                    }
+                    return response.json();
+                  })
+                  .then((data) => {
+
+                    console.log("%c委任先ノード詳細=", "color: red", data);  // 
+
+                    fetch(`https://${data.host}:3001/node/unlockedaccount`)    // unlockedaccount リンクされた公開鍵を取得
+                      .then((response2) => {
+                        if (!response2.ok) {
+                          throw new Error(`Network response was not ok: ${response2.status}`);
+                        }
+                        return response2.json();
+                      })
+                      .then((data2) => {
+                        delegate_list(URL, data2, sym, networkType); // 委任者リスト表示(symboladdress)
+                        if (searchArray(data2.unlockedAccount, account_linked_pubkey)) {
+                          console.log(`有効🟢`);
+                          hv_status.innerHTML = `🟢 有効`
+                          hv_node.innerHTML = `委任先ノード<br>${data.host}<br><br>委任者数<br>${data2.unlockedAccount.length}`
+                          removeLoading(); // クルクル非表示
+                        } else {
+                          console.log(`無効🔴`);
+                          hv_status.innerHTML = `🔴 無効 `
+                          removeLoading(); // クルクル非表示
+                          swal(`Link Error!!`, "委任先ノードとリンクしていません");
+                        }
+                      })
+                      .catch((error) => {
+                        console.error("Fetch error:", error);
+                      });
+                  })
+                  .catch((error) => {
+                    console.error("Fetch error:", error);
+                  });
+
+
+              } else { // node pubkey  が無い場合 (ノードオーナーのアカウントの場合) //////////////////////////////////
+                if (accountInfo.supplementalPublicKeys.vrf !== undefined) {  //  vrf pubkey がある場合
+                  console.log(" ==== ノードオーナーアカウント ====");
+
+                  fetch(`https://symbol.services/nodes/${accountInfo.publicKey}`)
+                    .then((response) => {
+                      if (!response.ok) {
+                        throw new Error(`Network response was not ok: ${response.status}`);
+                      }
+                      return response.json();
+                    })
+                    .then((data) => {
+
+                      console.log("%c委任先ノード詳細=", "color: red", data);
+
+                      fetch(`https://${data.host}:3001/node/unlockedaccount`)   // unlockedaccount リンクされた公開鍵を取得
+                        .then((response2) => {
+                          if (!response2.ok) {
+                            throw new Error(`Network response was not ok: ${response2.status}`);
+                          }
+                          return response2.json();
+                        })
+                        .then((data2) => {
+                          delegate_list(URL, data2, sym, networkType); // 委任者リスト表示(symboladdress)                                                                                                         
+                          if (searchArray(data2.unlockedAccount, account_linked_pubkey)) {
+                            console.log(`有効🟢`);
+                            hv_status.innerHTML = `🟢 有効`
+                            hv_node.innerHTML = `委任先ノード<br>${data.host}<br><br>委任者数<br>${data2.unlockedAccount.length}`
+                            removeLoading(); // クルクル非表示
+                          } else {
+                            console.log(`無効🔴`);
+                            hv_status.innerHTML = `🔴 無効 `
+                            removeLoading(); // クルクル非表示
+                            swal(`Link Error!!`, "委任先ノードとリンクしていません");
+                          }
+                        })
+                        .catch((error) => {
+                          console.error("Fetch error:", error);
+                        });
+                    })
+                    .catch((error) => {
+                      console.error("Fetch error:", error);
+                    });
+                } else {    // vrf pubkey が無い場合
+                  hv_status.innerHTML = `🔴 無効 `
+                  removeLoading(); // クルクル非表示
+                  swal(`Link Error!!`, "委任先ノードとリンクしていません");
+                }
+              }
+            } else {
+              hv_status.innerHTML = `🔴 無効 `
+              removeLoading(); // クルクル非表示
+              swal(`Link Error!!`, "委任先ノードとリンクしていません");
+            }
+
+          }); // accountRepo        
+      });  //  getActiveNode()
+    }    //  harvest_checker()
+
+    async function getActiveNode() { // アクティブなノードを探す //////////////////////////
+
+      for (let i = 0; i < NODE.length; i++) {
+        try {
+          // Fetchリクエストを送信
+          const response = await fetch(`${NODE[i]}/node/health`);
+
+          // レスポンス判定
+          if (!response.ok) {
+            throw new Error('HTTPエラー ' + response.status);
+          } else {
+            // レスポンスをJSONとして解析
+            const data = await response.json();
+            // data.statusを表示
+            console.log(`${NODE[i]}`, data.status);
+
+            if (data.status.apiNode === 'up' && data.status.db === 'up') {   // apiNode と db　が 正常の場合
+              return NODE[i];   // ノードの値を返す
+              break;
+            }
+          }
+        } catch (error) {
+          // エラーハンドリング
+          console.error(`Node Error!! ==> ${NODE[i]}`, error);
+        }
+      }
+      removeLoading()
+      //　アクティブなノードが見つからない場合
+      swal(`Active Node Error!!`, `サイト管理者にお問い合わせください
+      X(Twitter): @mikunNEM`)
+    }
+
+    function searchArray(array, searchString) {  // 配列から特定の文字列を探し、見つかれば　true を返す
+      for (let i = 0; i < array.length; i++) {
+        if (array[i] === searchString) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    ////////////////////////////////////////////////
+    // クルクル回るgif を表示
+    ////////////////////////////////////////////////
+    /* ------------------------------
+     表示用の関数
+     ------------------------------ */
+
+    function dispLoading(msg) {    //
+      // 引数なしの場合、メッセージは非表示。
+      if (msg === undefined) msg = "";
+
+      // 画面表示メッセージを埋め込み
+      var innerMsg = "<div id='innerMsg_re'>" + msg + "</div>";
+
+      // ローディング画像が非表示かどうかチェックし、非表示の場合のみ出力。
+      if ($("#nowLoading_re").length == 0) {
+        $("#kurukuru_re").append("<div id='nowLoading_re'>" + innerMsg + "</div>");
+      }
+    }
+
+    /* ------------------------------
+     表示ストップ用の関数
+     ------------------------------ */
+
+    function removeLoading() {  //
+      $("#nowLoading_re").remove();
+    }
+
+    async function delegate_list(URL, data2, sym, networkType) {
+
+      let address_list = [];  // 委任アカウントリスト
+      let address_from_pubkey;
+      for (let i = 0; i < data2.unlockedAccount.length; i++) {    // リンクされた公開鍵からSymbolアドレスに変換してリストにする                           
+
+        fetch(`${URL}/accounts/${data2.unlockedAccount[i]}`)
+          .then((response) => {
+            // レスポンスが成功したかどうかを確認
+            if (!response.ok) {
+              throw new Error(`Network response was not ok: ${response.status}`);
+            }
+            // JSONデータを解析して返す
+            return response.json();
+          })
+          .then((data) => {
+            address_from_pubkey = sym.PublicAccount.createFromPublicKey(
+              data.account.supplementalPublicKeys.linked.publicKey,
+              networkType
+            );
+            address_list.push(address_from_pubkey.address.address);
+            // console.log("委任アカウント ===",address_list);                                                                                                                            
+          })
+          .catch((error) => {
+            console.error("Fetch error:", error);
+          });
+        await new Promise(resolve => setTimeout(resolve, 20)); // 0.02秒処理を止める                                                                
+      }
+    }
+
+  </script>
+
+</body>
+
+</html>

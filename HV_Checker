@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <title>Harvest Checker</title>
+  <meta charset="utf-8"/>
+  <link rel="stylesheet" href="style.css" type="text/css">
+</head>
+<body>
+   <div class="container" style="text-align: center; padding-top: 200px" >
+   <h4>ハーベスト状況をチェックします。<br>Symbolのアドレスを入力してください。</h4>
+   <br>
+   <input type="text" id="addr" style="width:700px; font-size: 25px"/>
+   <br>
+   <br>
+   <br>
+   <button type="button" class="Form-Btn" onclick="harvest_checker();" style="font-size: 30px; cursor: pointer">Status Check</button>
+   <br>
+   <br> 
+   <div id="importance" style="font-size: 30px"></div> 
+   <br>
+   <div id="hv_status" style="font-size: 30px"></div> 
+   <br>
+   <div id="hv_node" style="font-size: 30px"></div>
+   </div>
+
+
+<script type="text/javascript" src="https://xembook.github.io/nem2-browserify/symbol-sdk-pack-2.0.4.js"></script>
+
+
+<script>
+
+const sym = require('/node_modules/symbol-sdk');
+const repo = new sym.RepositoryFactoryHttp('https://symbol-mikun.net:3001');
+const accountRepo = repo.createAccountRepository();
+const totalChainImportance = 78429286;
+
+function harvest_checker(){
+
+    let addr = document.getElementById('addr').value;
+    address = sym.Address.createFromRawAddress(addr);
+
+accountRepo.getAccountInfo(address)
+  .toPromise()
+  .then((accountInfo) => {
+        console.log("accountInfo=",accountInfo)     
+        console.log("account_Mosaics =",accountInfo.mosaics.length);
+        
+        
+
+        const impo = document.getElementById('importance');  // インポータンス表示
+        let accountImportance = Number(accountInfo.importance.toString()) / totalChainImportance;
+        if(accountImportance > 0){
+          accountImportance = Math.round( accountImportance );
+          accountImportance /= 1000000;
+        }
+
+        impo.innerHTML = `<div style="text-align: center;padding-top: 8px"><big><font color="green">インポータンス:　　${accountImportance} ％</font></big></div>`;
+
+        const hv_status = document.getElementById('hv_status');
+        const hv_node = document.getElementById('hv_node');
+
+        if(accountInfo.supplementalPublicKeys.linked !== undefined){  //  account pubkey
+          const account_pubkey = accountInfo.supplementalPublicKeys.linked.publicKey;
+          //console.log("account_pubkey===============",account_pubkey);
+        
+
+          if(accountInfo.supplementalPublicKeys.node !== undefined){   //  node pubkey
+            const node_pubkey = accountInfo.supplementalPublicKeys.node.publicKey;
+            //console.log("node_pubkey===============",node_pubkey);
+
+            let xhr = new XMLHttpRequest();
+            xhr.open("GET",`https://symbol.services/nodes/nodePublicKey/${node_pubkey}`,false);
+            
+          
+            let data;
+            let data2;
+            xhr.send(null);
+            if (xhr.status == 200) {
+              data = xhr.response;
+              data = JSON.parse(data);
+              console.log("%cノード=","color: red",data.host);
+              
+              let xhr2 = new XMLHttpRequest();
+              xhr2.open("GET",`https://${data.host}:3001/node/unlockedaccount`,false);
+              xhr2.send(null);
+                if (xhr2.status == 200) {
+                   data2 = xhr2.response;
+                   data2 = JSON.parse(data2);
+                   //console.log("%c委任公開鍵=","color: red",data2);
+                      console.log("委任アカウントPUBKEY",data2.unlockedAccount);
+                   if (searchArray(data2.unlockedAccount,account_pubkey)){
+                       console.log(`有効🟢`);
+                       hv_status.innerHTML = `🟢 有効`
+                       hv_node.innerHTML = `委任ノード　:　${data.host}`
+                   }else{
+                     console.log(`無効🔴`);
+                     hv_status.innerHTML = `🔴 無効 `
+                   }
+                }else {
+                  console.log(`Error: ${xhr2.status}`);
+                }
+            }else{
+              console.log(`Error: ${xhr.status}`);
+            }
+          }else{ // node pubkey  が無い場合 (ノードオーナーのアカウントの場合) //////////////////////////////////
+            if(accountInfo.supplementalPublicKeys.vrf !== undefined){  //  vrf pubkey
+
+              let xhr = new XMLHttpRequest();
+                xhr.open("GET",`https://symbol.services/nodes/${accountInfo.publicKey}`,false);
+
+              let data;
+              let data2;
+              xhr.send(null);
+                if (xhr.status == 200) {
+                   data = xhr.response;
+                   data = JSON.parse(data);
+                   console.log("%cノード=","color: red",data.host);
+              
+                   let xhr2 = new XMLHttpRequest();
+                   xhr2.open("GET",`https://${data.host}:3001/node/unlockedaccount`,false);
+                   xhr2.send(null);
+                     if (xhr2.status == 200) {
+                        data2 = xhr2.response;
+                        data2 = JSON.parse(data2);
+                        //console.log("%c委任公開鍵=","color: red",data2);                        
+
+                        if (searchArray(data2.unlockedAccount,account_pubkey)){
+                           console.log(`有効🟢`);
+                           hv_status.innerHTML = `🟢 有効`
+                           hv_node.innerHTML = `委任ノード　:　${data.host}`
+                        }else{
+                           console.log(`無効🔴`);
+                           hv_status.innerHTML = `🔴 無効 `
+                        }
+                     }else{
+                        console.log(`Error: ${xhr2.status}`);
+                     }
+                }else{
+                    console.log(`Error: ${xhr.status}`);
+                } 
+            }
+          }          
+        }else{
+          hv_status.innerHTML = `🔴 無効 `
+        }
+
+  });
+
+}
+
+function searchArray(array, searchString) {
+  for (let i = 0; i < array.length; i++) {
+    if (array[i] === searchString) {
+      return true;
+    }
+  }
+  return false;
+}
+
+  </script>
+
+  </body>
+</html>

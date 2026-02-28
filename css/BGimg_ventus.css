@@ -1,0 +1,5 @@
+body {
+  background-image:url("../src/ventus.png");
+  background-size: cover;
+  background-attachment: fixed;
+}
