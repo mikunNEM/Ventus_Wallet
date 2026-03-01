@@ -804,70 +804,55 @@ async function handleSSS(activeAddress) {
     }
 
     try {
-        const mo = await getMosaicInfo(mosaicIdHex);
-        const div = mo.divisibility;
-        const amount = BigInt(Math.round(Number(amountRaw) * Math.pow(10, div)));
-
         let msgData = message; // string(平文) または Uint8Array(暗号化済み)
+        let amount;
 
         if (isEncrypted && message) {
-            // 宛先の公開鍵を取得
+            // ─ 暗号化送信 ─────────────────────────────────────────────────────
+            // 公開鍵を取得したらすぐ1つ目のダイアログを開く
+            // モザイク情報はダイアログと並行して取得
             let recipientPubKey = null;
             try {
                 const accInfo = await getAccountInfo(toAddress);
                 recipientPubKey = accInfo.publicKey;
             } catch {
-                Swal.fire({ title: '暗号化失敗', text: '宛先の公開鍵を取得できません。平文で送信します。', icon: 'warning' });
+                Swal.fire({ title: '暗号化失敗', text: '宛先の公開鍵を取得できません。', icon: 'warning' });
+                return;
             }
 
-            if (recipientPubKey) {
-                // SSS でメッセージを暗号化（v2互換: setMessage→requestSignEncription）
-                window.SSS.setMessage(message, recipientPubKey);
-                const encMsg = await window.SSS.requestSignEncription();
-                // SSS requestSignEncription の戻り値は実装バージョンによって異なる:
-                //   - Uint8Array: 0x01 + 暗号化バイト列（そのまま使用）
-                //   - string:     hex文字列（"01..." or "a3f5..."）
-                //   - object:     { payload: string } 形式 (v2互換)
-                console.log('[handleSSS] encMsg type:', typeof encMsg, encMsg);
+            // 1つ目のSSSダイアログ（暗号化）と getMosaicInfo を同時に実行
+            window.SSS.setMessage(message, recipientPubKey);
+            const [encMsg, mo] = await Promise.all([
+                window.SSS.requestSignEncription(),   // ← すぐにダイアログが開く
+                getMosaicInfo(mosaicIdHex),            // ← その間にモザイク情報取得
+            ]);
 
-                if (encMsg instanceof Uint8Array) {
-                    // 既に Uint8Array: 0x01プレフィックスの有無を確認して補完
-                    msgData = (encMsg[0] === 0x01)
-                        ? encMsg
-                        : new Uint8Array([0x01, ...encMsg]);
+            const div = mo.divisibility;
+            amount = BigInt(Math.round(Number(amountRaw) * Math.pow(10, div)));
 
-                } else if (typeof encMsg === 'string' && encMsg.length > 0) {
-                    // hex文字列で返ってきた場合
-                    const hexStr = encMsg.replace(/^0x/i, ''); // "0x"プレフィックス除去
-                    const hexBytes = hexStr.match(/.{1,2}/g).map(b => parseInt(b, 16));
-                    // 先頭が 0x01（暗号化タイプ）でない場合は付与
-                    msgData = (hexBytes[0] === 0x01)
-                        ? new Uint8Array(hexBytes)
-                        : new Uint8Array([0x01, ...hexBytes]);
-
-                } else if (encMsg && typeof encMsg === 'object' && encMsg.payload) {
-                    // { payload: hex文字列 } 形式 (v2互換)
-                    const hexStr = encMsg.payload.replace(/^0x/i, '');
-                    const hexBytes = hexStr.match(/.{1,2}/g).map(b => parseInt(b, 16));
-                    msgData = (hexBytes[0] === 0x01)
-                        ? new Uint8Array(hexBytes)
-                        : new Uint8Array([0x01, ...hexBytes]);
-
-                } else {
-                    console.warn('[handleSSS] 暗号化メッセージの形式が不明。平文で送信します。', encMsg);
-                }
+            // encMsg の戻り値を正規化して 0x01 + 暗号バイト の Uint8Array にする
+            console.log('[handleSSS] encMsg type:', typeof encMsg, encMsg);
+            if (encMsg instanceof Uint8Array) {
+                msgData = (encMsg[0] === 0x01) ? encMsg : new Uint8Array([0x01, ...encMsg]);
+            } else if (typeof encMsg === 'string' && encMsg.length > 0) {
+                const hexBytes = encMsg.replace(/^0x/i, '').match(/.{1,2}/g).map(b => parseInt(b, 16));
+                msgData = (hexBytes[0] === 0x01) ? new Uint8Array(hexBytes) : new Uint8Array([0x01, ...hexBytes]);
+            } else if (encMsg && typeof encMsg === 'object' && encMsg.payload) {
+                const hexBytes = encMsg.payload.replace(/^0x/i, '').match(/.{1,2}/g).map(b => parseInt(b, 16));
+                msgData = (hexBytes[0] === 0x01) ? new Uint8Array(hexBytes) : new Uint8Array([0x01, ...hexBytes]);
+            } else {
+                console.warn('[handleSSS] 暗号化メッセージの形式が不明。平文で送信します。', encMsg);
             }
-        }
 
-        // 暗号化した場合、SSS の1つ目のダイアログが完全に閉じるのを待つ
-        // （直後に requestSign を呼ぶと "not signed" エラーになる race condition の回避）
-        if (isEncrypted && message) {
+            // SSS 1つ目のダイアログが閉じてから 2つ目を開くまでの待機（race condition 防止）
             await new Promise(r => setTimeout(r, 600));
-        }
 
-        console.log('[handleSSS] msgData:', msgData instanceof Uint8Array
-            ? '[Uint8Array] ' + Array.from(msgData).map(b => b.toString(16).padStart(2, '0')).join(' ')
-            : msgData);
+        } else {
+            // ─ 平文送信 ───────────────────────────────────────────────────────
+            const mo = await getMosaicInfo(mosaicIdHex);
+            const div = mo.divisibility;
+            amount = BigInt(Math.round(Number(amountRaw) * Math.pow(10, div)));
+        }
 
         const tx = buildTransferTx(toAddress, mosaicIdHex, amount, msgData, window.SSS.activePublicKey);
         console.log('[handleSSS] tx built. fee:', tx.fee?.value);
