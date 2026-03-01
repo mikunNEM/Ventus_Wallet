@@ -859,12 +859,19 @@ async function handleSSS(activeAddress) {
             }
         }
 
+        console.log('[handleSSS] msgData:', msgData instanceof Uint8Array
+            ? '[Uint8Array] ' + Array.from(msgData).map(b => b.toString(16).padStart(2, '0')).join(' ')
+            : msgData);
+
         const tx = buildTransferTx(toAddress, mosaicIdHex, amount, msgData, window.SSS.activePublicKey);
+        console.log('[handleSSS] tx built. fee:', tx.fee?.value, 'msgLen:', tx.message?.data?.length ?? '?');
+
         const signedPayload = await signAndAnnounce(tx);
-        console.log('[handleSSS] signedPayload:', signedPayload);
+        console.log('[handleSSS] 送信成功:', signedPayload);
+        Swal.fire({ title: '送信しました！', icon: 'success' });
     } catch (e) {
-        console.error('[handleSSS]', e);
-        Swal.fire({ title: '送信失敗', text: e.message, icon: 'error' });
+        console.error('[handleSSS] エラー詳細:', e?.name, e?.message, e);
+        Swal.fire({ title: '送信失敗', text: e?.message ?? String(e), icon: 'error' });
     }
 }
 
