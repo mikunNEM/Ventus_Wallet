@@ -1423,22 +1423,23 @@ async function handleSSS_dona(activeAddress) {
 // エントリポイント
 // ─────────────────────────────────────────────────────────────────────────────
 
-// SSS の準備完了イベント "SSSWindow" を待ってから初期化する
-// SSSWindow が既に発火済み（isAllowedSSS が存在する）場合は即実行する
+// SSS の準備が完了したら main() を呼ぶ
+// ポイント: isAllowedSSS が存在しても最初は false を返すため短絡しない
+// SSSWindow イベントは SSS が本当に準備完了したときだけ発火する
 function waitForSSS() {
-    if (typeof window.isAllowedSSS === 'function') {
-        // 既に SSS 拡張機能が読み込み済み
+    let started = false;
+    const startMain = () => {
+        if (started) return; // 二重起動防止
+        started = true;
         main();
-    } else {
-        // SSSWindow イベントを待つ
-        window.addEventListener('SSSWindow', () => main(), { once: true });
-        // タイムアウト: SSS なしでも 3 秒後に起動（SSS を使わない場合のフォールバック）
-        setTimeout(() => {
-            if (typeof window.isAllowedSSS !== 'function') {
-                main();
-            }
-        }, 3000);
-    }
+    };
+
+    // 常に SSSWindow を待つ（isAllowedSSS 存在チェックで短絡しない）
+    window.addEventListener('SSSWindow', startMain, { once: true });
+
+    // フォールバック: 3秒後に SSSWindow が来なければ起動
+    // （SSS 未インストール / 未リンク 環境用）
+    setTimeout(startMain, 3000);
 }
 
 if (document.readyState === 'loading') {
