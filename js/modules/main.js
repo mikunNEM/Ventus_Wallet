@@ -663,17 +663,13 @@ async function main() {
     document.getElementById('js-hamburger')?.addEventListener('click', () => nav.classList.toggle('open'));
     document.getElementById('js-black-bg')?.addEventListener('click', () => nav.classList.remove('open'));
 
-    // SSS チェック
+    // SSS チェック（未リンクでも return しない）
     if (typeof window.isAllowedSSS === 'function') {
         console.log('SSS_Link=', window.isAllowedSSS());
-        window.requestSSS?.();
-        if (!window.isAllowedSSS()) {
-            Swal.fire('SSS Link Error!!', 'SSSとLinkしてください。\nLink済みの場合は、ブラウザをリロードしてください。');
-            return;
-        }
+        window.requestSSS?.(); // リンクダイアログを要求
     }
 
-    // SDK + ノード初期化
+    // SDK + ノード初期化（SSS link 状態に関わらず実行）
     await loadSDK();
     const node = await getAvailableNode();
     await initNetwork(node);
@@ -694,8 +690,19 @@ async function main() {
         dom_account_name.innerHTML = `<font color="#ff8c00">${window.SSS?.activeName}</font>`;
     }
 
+    // SSSWindow（リンク完了イベント）が来たらアカウント情報を再取得するリスナーを登録
+    window.addEventListener('SSSWindow', async () => {
+        console.log('[main] SSSWindow received, initializing account...');
+        await initAccountAndUI();
+    }, { once: true });
+
+    // 現時点で既にリンク済みならすぐにアカウント情報を取得
     const activeAddress = window.SSS?.activeAddress;
-    if (!activeAddress) return;
+    if (!activeAddress) {
+        // 未リンク: SSS がない旨をUI に表示して待機
+        if (dom_account_name) dom_account_name.innerHTML = `<font color="gray">SSS未接続</font>`;
+        return; // アカウント依存の処理はスキップ（SSSWindow で再実行）
+    }
 
     // アカウント情報取得
     const accountData = await getAccountInfo(activeAddress);
@@ -724,7 +731,6 @@ async function main() {
     // WebSocket 接続
     connectWebSocket(
         activeAddress,
-        // confirmed: ding2.ogg → ポップアップを閉じる → ventus.mp3
         (tx) => {
             const audio2 = new Audio('./src/ding2.ogg');
             audio2.currentTime = 0;
@@ -734,7 +740,6 @@ async function main() {
             const audioVentus = new Audio('./src/ventus.mp3');
             audioVentus.play();
         },
-        // unconfirmed: ding.ogg → ユニコーンポップアップ表示
         (tx) => {
             const audio1 = new Audio('./src/ding.ogg');
             audio1.currentTime = 0;
@@ -771,6 +776,43 @@ async function main() {
     window.handleSSS_dona = () => handleSSS_dona(activeAddress);
 
     console.log('[main] 初期化完了');
+}
+
+// SSSWindow（SSS リンク完了）後にアカウント関連の初期化を行う
+// main() が SSS 未接続のまま起動した場合でも、後から呼ばれる
+async function initAccountAndUI() {
+    const addr = window.SSS?.activeAddress;
+    if (!addr) { console.warn('[initAccountAndUI] activeAddress が取得できません'); return; }
+
+    // ネットワーク名表示を更新
+    const dom_account_name = document.getElementById('account_name');
+    if (networkType === 104 && dom_account_name) {
+        dom_account_name.innerHTML = `<font color="#ff00ff">${window.SSS?.activeName}</font>`;
+    } else if (dom_account_name) {
+        dom_account_name.innerHTML = `<font color="#ff8c00">${window.SSS?.activeName}</font>`;
+    }
+
+    try {
+        const accountData = await getAccountInfo(addr);
+        await initAccountDisplay(accountData);
+    } catch (e) { console.error('[initAccountAndUI]', e); }
+
+    // グローバル関数として公開
+    window.handleSSS = () => handleSSS(addr);
+    window.handleSSS_agg = () => handleSSS_agg(addr);
+    window.handleSSS_msig = () => handleSSS_msig(addr);
+    window.Onclick_mosaic = () => Onclick_mosaic(addr);
+    window.mosaic_supply = () => mosaic_supply();
+    window.revoke_mosaic = () => revoke_mosaic(addr);
+    window.Onclick_Namespace = () => Onclick_Namespace();
+    window.Onclick_subNamespace = () => Onclick_subNamespace();
+    window.alias_Link = () => alias_Link();
+    window.Metadata = () => Metadata(addr);
+    window.Msig_account = () => Msig_account(addr);
+    window.handleSSS_multisig = () => handleSSS_multisig(addr);
+    window.handleSSS_dona = () => handleSSS_dona(addr);
+
+    console.log('[initAccountAndUI] アカウント初期化完了:', addr);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
