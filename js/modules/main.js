@@ -892,7 +892,8 @@ async function handleSSS(activeAddress) {
             }
 
             // SSS 1つ目のダイアログが閉じてから 2つ目を開くまでの待機（race condition 防止）
-            await new Promise(r => setTimeout(r, 600));
+            // v2 の script.js も setTimeout 1000ms を使用していた
+            await new Promise(r => setTimeout(r, 1000));
 
         } else {
             // ─ 平文送信 ───────────────────────────────────────────────────────
