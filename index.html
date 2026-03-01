@@ -951,6 +951,11 @@
           integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
           crossorigin="anonymous"></script>
         <br>
+        <div style="text-align:center; font-size:13px; color:#555;">
+          <div>最新ブロック　　: <span id="chain_height">-</span></div>
+          <div>確定ブロック　　: <span id="finalized_chain_height">-</span></div>
+        </div>
+        <br>
         <table id="harvest" class="table" style="width:45%;margin: auto;text-align: center">
           <thead>
             <tr>
@@ -1639,530 +1644,195 @@
 
   </script>
 
-  <!-- <script type="text/javascript" src="https://xembook.github.io/nem2-browserify/symbol-sdk-pack-2.0.5.js"></script> -->
-  <script type="text/javascript" src="https://mikunnem.github.io/symbol-browserify/symbol-sdk-pack-2.0.6.js"></script>
-  <script type="text/javascript" src="https://xembook.github.io/symbol-browserify/metal-on-symbol-0.2.2.js"></script>
+  <!-- Symbol SDK v3 (ES Modules) -->
+  <!-- symbol-sdk v3 is loaded dynamically in config.js via import() -->
+
   <!-- SweetAlert2 JS -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <!-- <script type="text/javascript" src="./js/jquery.simplePagination.js"></script> -->
 
-  <script type="text/javascript" src="script.js"></script>
+  <!-- Ventus v3 メインモジュール (ES Module) -->
+  <script type="module" src="./js/modules/main.js"></script>
 
   <script>
-    // aggregate送信用ファイルを読み込み　エラーチェック　  //  3つが同じ冗長なコードになっているので、出来れば一つに纏めたい。
-    const input_agg = document.getElementById("upload-file_agg");    // aggregate
-    const input_msig = document.getElementById("upload-file_msig");  // multisig
-    const input_re = document.getElementById("upload-file_re");      // モザイク回収
-
-
-    //FileReaderの定義
-    const reader = new FileReader();
-    let address1 = [];
-    let address2 = [];
-    let amount1 = [];
-    let mosaic1 = [];
-    let message1 = [];
-    let file;
-    let file1;
-    // 選択したファイルのファイル名を出力する
-    $('input').on('change', function () {
-      let file = $(this).prop('files')[0];
-      $('p1').text(file.name);
-      address1.length = 0;
-      address2.length = 0;
-      csv_check_agg = document.getElementById("csv_check_agg").checked;  // csvファイルチェックのフラグ
-      csv_check_msig = document.getElementById("csv_check_msig").checked;  // csvファイルチェックのフラグ
-      csv_check_re = document.getElementById("csv_check_re").checked;  // csvファイルチェックのフラグ
-
-      console.log("csv_check_agg ====", csv_check_agg);
-      console.log("csv_check_msig ====", csv_check_msig);
-      console.log("csv_check_re ====", csv_check_re);
-    });
-
-    /////////////////////////// input_agg に変化があった場合 ////////////////////////////////////////////////////////////////////////////
-
-    input_agg.addEventListener('change', (e) => {
-      file1 = e.target.files[0];
-      console.log("%cfile1===", "color: red", file1);
-      if (typeof file1 === "undefined") {
-        address1.length = 0;
-        address2.length = 0; // ファイル選択が取り消された場合、配列を削除
-        $('p1').text("選択されていません");
-        //$('p2').text(""); // address_list 非表示
-        file = file1;
-      }
-
-      //ファイルの種類を絞る
-      if (file1.type === 'text/csv') {
-        reader.onload = () => {
-
-          address2 = reader.result.split(/\r\n|\n/);   //splitで改行ごとに配列化
-          console.log("address2===============", address2);
-
-          if (address2[address2.length - 1] === "") {  // 改行の後 "" が最後の配列にある場合
-            address2.pop();  //最後の配列要素を削除
-          }
-
-          (async () => {
-            console.log("CSV_agg チェック =========", csv_check_agg);
-            if (csv_check_agg === true) {
-              //$('p2').text(""); // address_list 非表示
-              dispLoading_agg(`Address にエラーが無いかチェックしています...`); //  ローディング画像表示
-              for (let i = 0; i < address2.length; ++i) {
-                let cells = address2[i].split(",");    //カンマごとに配列化 (名前とアドレスを分ける)
-                address1[i] = cells[1];                //アドレスだけを格納
-
-                console.log("cells[2]===================", cells[2]);
-                if (cells[2] !== undefined) {               //３列目がある場合
-                  amount1[i] = cells[2];
-                  if (cells[2] === "") {
-                    amount1[i] = "0";
-                  }
-                }
-                if (cells[3] !== undefined) {              // 4列目がある場合
-                  mosaic1[i] = cells[3];
-                }
-                if (cells[4] !== undefined) {              // 5列目がある場合
-                  message1[i] = cells[4];
-                  if (byteLengthUTF8(cells[4]) > 1023) {
-                    Swal.fire(`[${i + 1}行目]  メッセージのサイズが${byteLengthUTF8(cells[4])}バイトです!!          
-                   1023バイト 以下にしてください。`);
-                    return;
-                  }
-                }
-                // 余分なハイフンやスペースを削除
-                if (address1[i].length === 45) {                 //ハイフン有りのアドレスの場合
-                  address1[i] = address1[i].replace(/-/g, "");  // ハイフンを削除する
-                }
-                address1[i] = address1[i].replace(/ /g, "");  // スペース削除
-                address1[i] = address1[i].replace(/　/g, ""); //　スペース削除
-                address1[i] = address1[i].replace(/\r?\n|\r/g, ""); //　改行削除
-
-                console.log(`address[${i}]============`, address1[i]);
-
-                if (address1[i].length !== 39) {  // 39文字以外の処理
-                  const namespaceId = new sym.NamespaceId(address1[i].toLowerCase());
-                  const ns_check = await nsRepo.getLinkedAddress(namespaceId)
-                    .toPromise()
-                    .catch(() => Swal.fire(`Namespace or Address Error!!`, `[No.${i + 1}]
-
-                             ${address1[i]}`));
-
-                  console.log(`%cns_check[${i}]`, "color: red", ns_check);
-                  if (ns_check !== true) { // Namespace がリンクされている場合
-                    address1[i] = ns_check.address;   // Namspace をアドレスに変更
-                  }
-                }
-              }
-
-              const res1 = [];
-              for (let i = 0; i < address1.length; ++i) {
-                if (address1[i].length === 39) {  // 39文字の場合
-                  if (address1[i].charAt(0) === "N" || address1[i].charAt(0) === "T") {
-                    const account_check = await accountRepo.getAccountInfo(sym.Address.createFromRawAddress(address1[i]))
-                      .toPromise()
-                      .catch(() => Swal.fire(`Address Error!!`, `
-                          ネットワークに認識されていないアドレスです
-
-                          [No.${i + 1}]
-                           
-                          ${address1[i]}
-
-                          
-                          ※トランザクション履歴のないアドレスはネットワークに認識されていませんが、送信は可能です`));                                                   // アドレス　有無のチェック
-
-                    alice = sym.Address.createFromRawAddress(address1[i]);                //アカウント制限チェック
-                    res = await resAccountRepo.getAccountRestrictions(alice)
-                      .toPromise()
-                      .catch(() => console.log(`制限無し[${i + 1}]`));
-
-                    if (res !== undefined) {
-                      res1.push(`[No.${i + 1}]
-                                ${res.address.address}
-
-                                `);
-                      Swal.fire(`アカウント制限有り`, `${res1}`);
-
-                      for (j = 0; j < res.restrictions.length; ++j) {
-                        console.log(`restrictions[${i}][${j}]`, res.restrictions[j]);
-                      }
-                    }
-
-                  } else { //先頭が NまたはTでない場合
-                    Swal.fire(`Address Error!!`, `[No.${i + 1}]
-
-                        ${address1[i]}`);        // アドレス　有無のチェック
-                  }
-                }
-              }
-              removeLoading();  //  ローディング画像を非表示
-              Swal.fire(`アドレスチェック完了！`, "");
-            } else {    // エラーチェックしない
-              for (let i = 0; i < address2.length; ++i) {
-                let cells = address2[i].split(",");    //カンマごとに配列化 (名前とアドレスを分ける)
-                address1[i] = cells[1];                //アドレスだけを格納
-                if (cells[2] !== undefined) {               //３列目がある場合
-                  amount1[i] = cells[2];
-                  if (cells[2] === "") {
-                    amount1[i] = "0";
-                  }
-                }
-                if (cells[3] !== undefined) {              // 4列目がある場合
-                  mosaic1[i] = cells[3];
-                }
-                if (cells[4] !== undefined) {              // 5列目がある場合
-                  message1[i] = cells[4];
-                  if (byteLengthUTF8(cells[4]) > 1023) {
-                    Swal.fire(`[${i + 1}行目]  メッセージのサイズが${byteLengthUTF8(cells[4])}バイトです!!          
-                   1023バイト 以下にしてください。`);
-                    return;
-                  }
-                }
-                // 余分なハイフンやスペースを削除
-                if (address1[i].length === 45) {                 //ハイフン有りのアドレスの場合
-                  address1[i] = address1[i].replace(/-/g, "");  // ハイフンを削除する
-                }
-                address1[i] = address1[i].replace(/ /g, "");  // スペース削除
-                address1[i] = address1[i].replace(/　/g, ""); //　スペース削除
-                address1[i] = address1[i].replace(/\r?\n|\r/g, ""); //　改行削除
-
-              }
-              //const address_list = document.getElementById("address_list");
-              //address_list.innerHTML= `${address1}`;
-            }
-
-
-          })(); // async()
-
-          console.log("address1=", address1);
-          console.log("amount1=", amount1);
-          console.log("mosaic1=", mosaic1);
-          console.log("message1=", message1);
-        }
-        reader.readAsText(file1);
-      }
-    });
-
-    /////////////////////////// input_msig に変化があった場合 ////////////////////////////////////////////////////////////////////////////
-
-    input_msig.addEventListener('change', (e) => {
-      file1 = e.target.files[0];
-      console.log("%cfile1===", "color: red", file1);
-      if (typeof file1 === "undefined") {
-        address1.length = 0;
-        address2.length = 0; // ファイル選択が取り消された場合、配列を削除
-        $('p1').text("選択されていません");
-        //$('p2').text(""); // address_list 非表示
-        file = file1;
-      }
-
-      //ファイルの種類を絞る
-      if (file1.type === 'text/csv') {
-        reader.onload = () => {
-
-          address2 = reader.result.split(/\r\n|\n/);   //splitで改行ごとに配列化
-          console.log("address2===============", address2);
-
-          if (address2[address2.length - 1] === "") {  // 改行の後 "" が最後の配列にある場合
-            address2.pop();  //最後の配列要素を削除
-          }
-
-          (async () => {
-            console.log("CSV_msig チェック =========", csv_check_msig);
-            if (csv_check_msig === true) {
-              //$('p2').text(""); // address_list 非表示
-              dispLoading_msig(`Address にエラーが無いかチェックしています...`); //  ローディング画像表示
-              for (let i = 0; i < address2.length; ++i) {
-                let cells = address2[i].split(",");    //カンマごとに配列化 (名前とアドレスを分ける)
-                address1[i] = cells[1];                //アドレスだけを格納
-
-                console.log("cells[2]===================", cells[2]);
-                if (cells[2] !== undefined) {               //３列目がある場合
-                  amount1[i] = cells[2];
-                  if (cells[2] === "") {
-                    amount1[i] = "0";
-                  }
-                }
-                if (cells[3] !== undefined) {              // 4列目がある場合
-                  mosaic1[i] = cells[3];
-                }
-                if (cells[4] !== undefined) {              // 5列目がある場合
-                  message1[i] = cells[4];
-                  if (byteLengthUTF8(cells[4]) > 1023) {
-                    Swal.fire(`[${i + 1}行目]  メッセージのサイズが${byteLengthUTF8(cells[4])}バイトです!!          
-                   1023バイト 以下にしてください。`);
-                    return;
-                  }
-                }
-                // 余分なハイフンやスペースを削除
-                if (address1[i].length === 45) {                 //ハイフン有りのアドレスの場合
-                  address1[i] = address1[i].replace(/-/g, "");  // ハイフンを削除する
-                }
-                address1[i] = address1[i].replace(/ /g, "");  // スペース削除
-                address1[i] = address1[i].replace(/　/g, ""); //　スペース削除
-                address1[i] = address1[i].replace(/\r?\n|\r/g, ""); //　改行削除
-
-                console.log(`address[${i}]============`, address1[i]);
-
-                if (address1[i].length !== 39) {  // 39文字以外の処理
-                  const namespaceId = new sym.NamespaceId(address1[i].toLowerCase());
-                  const ns_check = await nsRepo.getLinkedAddress(namespaceId)
-                    .toPromise()
-                    .catch(() => Swal.fire(`Namespace or Address Error!!`, `[No.${i + 1}]
-
-                             ${address1[i]}`));
-
-                  console.log(`%cns_check[${i}]`, "color: red", ns_check);
-                  if (ns_check !== true) { // Namespace がリンクされている場合
-                    address1[i] = ns_check.address;   // Namspace をアドレスに変更
-                  }
-                }
-              }
-
-              const res1 = [];
-              for (let i = 0; i < address1.length; ++i) {
-                if (address1[i].length === 39) {  // 39文字の場合
-                  if (address1[i].charAt(0) === "N" || address1[i].charAt(0) === "T") {
-                    const account_check = await accountRepo.getAccountInfo(sym.Address.createFromRawAddress(address1[i]))
-                      .toPromise()
-                      .catch(() => Swal.fire(`Address Error!!`, `
-                          ネットワークに認識されていないアドレスです
-
-                          [No.${i + 1}]
-                           
-                          ${address1[i]}
-
-                          
-                          ※トランザクション履歴のないアドレスはネットワークに認識されていませんが、送信は可能です`));                                                   // アドレス　有無のチェック
-
-                    alice = sym.Address.createFromRawAddress(address1[i]);                //アカウント制限チェック
-                    res = await resAccountRepo.getAccountRestrictions(alice)
-                      .toPromise()
-                      .catch(() => console.log(`制限無し[${i + 1}]`));
-
-                    if (res !== undefined) {
-                      res1.push(`[No.${i + 1}]
-                                ${res.address.address}
-
-                                `);
-                      Swal.fire(`アカウント制限有り`, `${res1}`);
-
-                      for (j = 0; j < res.restrictions.length; ++j) {
-                        console.log(`restrictions[${i}][${j}]`, res.restrictions[j]);
-                      }
-                    }
-
-                  } else { //先頭が NまたはTでない場合
-                    Swal.fire(`Address Error!!`, `[No.${i + 1}]
-
-                        ${address1[i]}`);        // アドレス　有無のチェック
-                  }
-                }
-              }
-              removeLoading();  //  ローディング画像を非表示
-              Swal.fire(`アドレスチェック完了！`, "");
-            } else {    // エラーチェックしない
-              for (let i = 0; i < address2.length; ++i) {
-                let cells = address2[i].split(",");    //カンマごとに配列化 (名前とアドレスを分ける)
-                address1[i] = cells[1];                //アドレスだけを格納
-                if (cells[2] !== undefined) {               //３列目がある場合
-                  amount1[i] = cells[2];
-                  if (cells[2] === "") {
-                    amount1[i] = "0";
-                  }
-                }
-                if (cells[3] !== undefined) {              // 4列目がある場合
-                  mosaic1[i] = cells[3];
-                }
-                if (cells[4] !== undefined) {              // 5列目がある場合
-                  message1[i] = cells[4];
-                  if (byteLengthUTF8(cells[4]) > 1023) {
-                    Swal.fire(`[${i + 1}行目]  メッセージのサイズが${byteLengthUTF8(cells[4])}バイトです!!          
-                   1023バイト 以下にしてください。`);
-                    return;
-                  }
-                }
-                // 余分なハイフンやスペースを削除
-                if (address1[i].length === 45) {                 //ハイフン有りのアドレスの場合
-                  address1[i] = address1[i].replace(/-/g, "");  // ハイフンを削除する
-                }
-                address1[i] = address1[i].replace(/ /g, "");  // スペース削除
-                address1[i] = address1[i].replace(/　/g, ""); //　スペース削除
-                address1[i] = address1[i].replace(/\r?\n|\r/g, ""); //　改行削除
-
-              }
-              //const address_list = document.getElementById("address_list");
-              //address_list.innerHTML= `${address1}`;
-            }
-
-
-          })(); // async()
-
-          console.log("address1=", address1);
-          console.log("amount1=", amount1);
-          console.log("mosaic1=", mosaic1);
-          console.log("message1=", message1);
-        }
-        reader.readAsText(file1);
-      }
-    });
-
-    /////////////////////////// input_re に変化があった場合 ////////////////////////////////////////////////////////////////////////////
-
-    input_re.addEventListener('change', (e) => {
-      file1 = e.target.files[0];
-      console.log("%cfile1===", "color: red", file1);
-      if (typeof file1 === "undefined") {
-        address1.length = 0;
-        address2.length = 0; // ファイル選択が取り消された場合、配列を削除
-        $('p1').text("選択されていません");
-        //$('p2').text(""); // address_list 非表示
-        file = file1;
-      }
-
-      //ファイルの種類を絞る
-      if (file1.type === 'text/csv') {
-        reader.onload = () => {
-          address2 = reader.result.split(/\r\n|\n/);   //splitで改行ごとに配列化
-
-          if (address2[address2.length - 1] === "") {  // 改行の後 "" が最後の配列にある場合
-            address2.pop();  //最後の配列要素を削除
-          }
-
-          (async () => {
-            console.log("CSV_re チェック =========", csv_check_re);
-            if (csv_check_re === true) {
-              //$('p2').text(""); // address_list 非表示
-              dispLoading_re(`Address にエラーが無いかチェックしています...`); //  ローディング画像表示
-              for (let i = 0; i < address2.length; ++i) {
-                let cells = address2[i].split(",");    //カンマごとに配列化 (名前とアドレスを分ける)
-                address1[i] = cells[1];                //アドレスだけを格納
-                if (cells[2] !== undefined) {               //３列目がある場合
-                  amount1[i] = cells[2];
-                  if (cells[2] === "") {
-                    amount1[i] = "0";
-                  }
-                }
-                if (cells[3] !== undefined) {              // 4列目がある場合
-                  mosaic1[i] = cells[3];
-                }
-                if (cells[4] !== undefined) {              // 5列目がある場合
-                  message1[i] = cells[4];
-                  if (byteLengthUTF8(cells[4]) > 1023) {
-                    Swal.fire(`[${i + 1}行目]  メッセージのサイズが${byteLengthUTF8(cells[4])}バイトです!!          
-                   1023バイト 以下にしてください。`);
-                    return;
-                  }
-                }
-                // 余分なハイフンやスペースを削除
-                if (address1[i].length === 45) {                 //ハイフン有りのアドレスの場合
-                  address1[i] = address1[i].replace(/-/g, "");  // ハイフンを削除する
-                }
-                address1[i] = address1[i].replace(/ /g, "");  // スペース削除
-                address1[i] = address1[i].replace(/　/g, ""); //　スペース削除
-                address1[i] = address1[i].replace(/\r?\n|\r/g, ""); //　改行削除
-
-                if (address1[i].length !== 39) {  // 39文字以外の処理
-                  const namespaceId = new sym.NamespaceId(address1[i].toLowerCase());
-                  const ns_check = await nsRepo.getLinkedAddress(namespaceId)
-                    .toPromise()
-                    .catch(() => Swal.fire(`Namespace or Address Error!!`, `[No.${i + 1}]
-
-                             ${address1[i]}`));
-
-                  console.log(`%cns_check[${i}]`, "color: red", ns_check);
-                  if (ns_check !== true) { // Namespace がリンクされている場合
-                    address1[i] = ns_check.address;   // Namspace をアドレスに変更
-                  }
-                }
-              }
-
-              const res1 = [];
-              for (let i = 0; i < address1.length; ++i) {
-                if (address1[i].length === 39) {  // 39文字の場合
-                  if (address1[i].charAt(0) === "N" || address1[i].charAt(0) === "T") {
-                    const account_check = await accountRepo.getAccountInfo(sym.Address.createFromRawAddress(address1[i]))
-                      .toPromise()
-                      .catch(() => Swal.fire(`Address Error!!`, `[No.${i + 1}]
-
-                          ${address1[i]}`));                                                   // アドレス　有無のチェック
-
-                    alice = sym.Address.createFromRawAddress(address1[i]);                //アカウント制限チェック
-                    res = await resAccountRepo.getAccountRestrictions(alice)
-                      .toPromise()
-                      .catch(() => console.log(`制限無し[${i + 1}]`));
-
-                    if (res !== undefined) {
-                      res1.push(`[No.${i + 1}]
-                                ${res.address.address}
-
-                                `);
-                      Swal.fire(`アカウント制限有り`, `${res1}`);
-
-                      for (j = 0; j < res.restrictions.length; ++j) {
-                        console.log(`restrictions[${i}][${j}]`, res.restrictions[j]);
-                      }
-                    }
-
-                  } else { //先頭が NまたはTでない場合
-                    Swal.fire(`Address Error!!`, `[No.${i + 1}]
-
-                        ${address1[i]}`);        // アドレス　有無のチェック
-                  }
-                }
-              }
-              removeLoading();  //  ローディング画像を非表示
-              Swal.fire(`アドレスチェック完了！`, "");
-            } else {    // エラーチェックしない
-              for (let i = 0; i < address2.length; ++i) {
-                let cells = address2[i].split(",");    //カンマごとに配列化 (名前とアドレスを分ける)
-                address1[i] = cells[1];                //アドレスだけを格納
-                if (cells[2] !== undefined) {               //３列目がある場合
-                  amount1[i] = cells[2];
-                  if (cells[2] === "") {
-                    amount1[i] = "0";
-                  }
-                }
-                if (cells[3] !== undefined) {              // 4列目がある場合
-                  mosaic1[i] = cells[3];
-                }
-                if (cells[4] !== undefined) {              // 5列目がある場合
-                  message1[i] = cells[4];
-                  if (byteLengthUTF8(cells[4]) > 1023) {
-                    Swal.fire(`[${i + 1}行目]  メッセージのサイズが${byteLengthUTF8(cells[4])}バイトです!!          
-                   1023バイト 以下にしてください。`);
-                    return;
-                  }
-                }
-                // 余分なハイフンやスペースを削除
-                if (address1[i].length === 45) {                 //ハイフン有りのアドレスの場合
-                  address1[i] = address1[i].replace(/-/g, "");  // ハイフンを削除する
-                }
-                address1[i] = address1[i].replace(/ /g, "");  // スペース削除
-                address1[i] = address1[i].replace(/　/g, ""); //　スペース削除
-                address1[i] = address1[i].replace(/\r?\n|\r/g, ""); //　改行削除
-
-              }
-              //const address_list = document.getElementById("address_list");
-              //address_list.innerHTML= `${address1}`;
-            }
-
-
-          })(); // async()
-
-          console.log("address1=", address1);
-        }
-        reader.readAsText(file1);
-      }
-    });
-
-    /*function bytelength(s) {   //    文字列のバイト長(UTF-8)を得る
-      return encodeURI(s).replace(/%../g, "*").length;
-    }*/
+    // ─────────────────────────────────────────────────────────────────────────
+    // v3 CSV アドレスチェック用ヘルパー
+    // window.ventus_NODE は main.js の initNetwork() 完了後に設定される
+    // ─────────────────────────────────────────────────────────────────────────
 
     function byteLengthUTF8(s) {
       return new TextEncoder().encode(s).length;
     }
+
+    function getNode() {
+      return window.ventus_NODE || null;
+    }
+
+    // ネームスペース名 → リンク先アドレスを取得 (v3: GET /namespaces)
+    async function getLinkedAddress(namespaceName) {
+      const node = getNode();
+      if (!node) throw new Error('NODE not initialized');
+      const res = await fetch(`${node}/namespaces?level0=${encodeURIComponent(namespaceName)}&pageSize=1`);
+      const json = await res.json();
+      if (!json.data || json.data.length === 0) return null;
+      const ns = json.data[0].namespace;
+      if (ns.alias && ns.alias.type === 2 && ns.alias.address) return ns.alias.address;
+      return null;
+    }
+
+    // アカウント存在チェック (v3: GET /accounts/{address})
+    async function checkAccountExists(address) {
+      const node = getNode();
+      if (!node) return false;
+      const res = await fetch(`${node}/accounts/${address}`);
+      return res.ok;
+    }
+
+    // アカウント制限チェック (v3: GET /restrictions/account/{address})
+    async function getAccountRestrictions(address) {
+      const node = getNode();
+      if (!node) return undefined;
+      const res = await fetch(`${node}/restrictions/account/${address}`);
+      if (!res.ok) return undefined;
+      const json = await res.json();
+      return json.accountRestrictions;
+    }
+
+    // CSV行の前処理（ハイフン・スペース・改行を除去）
+    function cleanAddress(addr) {
+      if (!addr) return addr;
+      if (addr.length === 45) addr = addr.replace(/-/g, '');
+      return addr.replace(/ /g, '').replace(/　/g, '').replace(/\r?\n|\r/g, '');
+    }
+
+    // CSVを解析してアドレス・金額・モザイク・メッセージ配列を返す
+    function parseCSV(text, arrays) {
+      const { address1, amount1, mosaic1, message1 } = arrays;
+      const rows = text.split(/\r\n|\n/);
+      if (rows[rows.length - 1] === '') rows.pop();
+      for (let i = 0; i < rows.length; i++) {
+        const cells = rows[i].split(',');
+        address1[i] = cleanAddress(cells[1]);
+        if (cells[2] !== undefined) amount1[i] = cells[2] === '' ? '0' : cells[2];
+        if (cells[3] !== undefined) mosaic1[i] = cells[3];
+        if (cells[4] !== undefined) {
+          if (byteLengthUTF8(cells[4]) > 1023) {
+            Swal.fire(`[${i + 1}行目] メッセージが${byteLengthUTF8(cells[4])}バイト。1023バイト以下にしてください。`);
+            return false;
+          }
+          message1[i] = cells[4];
+        }
+      }
+      return rows;
+    }
+
+    // アドレスチェック（v3）
+    async function checkAddresses(address1, loadFn, unloadFn) {
+      loadFn(`Address にエラーが無いかチェックしています...`);
+      const res1 = [];
+      for (let i = 0; i < address1.length; i++) {
+        if (address1[i] && address1[i].length !== 39) {
+          try {
+            const linked = await getLinkedAddress(address1[i].toLowerCase());
+            if (linked) { address1[i] = linked; }
+            else { Swal.fire(`Namespace or Address Error!!`, `[No.${i + 1}]\n\n${address1[i]}`); }
+          } catch { Swal.fire(`Namespace or Address Error!!`, `[No.${i + 1}]\n\n${address1[i]}`); }
+        }
+        if (address1[i] && address1[i].length === 39) {
+          const first = address1[i].charAt(0);
+          if (first === 'N' || first === 'T') {
+            const exists = await checkAccountExists(address1[i]).catch(() => false);
+            if (!exists) console.warn(`[No.${i + 1}] ${address1[i]} はネットワーク未認識（送信は可能）`);
+            const restrictions = await getAccountRestrictions(address1[i]);
+            if (restrictions && restrictions.restrictions && restrictions.restrictions.length > 0) {
+              res1.push(`[No.${i + 1}] ${address1[i]}\n`);
+              Swal.fire(`アカウント制限有り`, `${res1}`);
+              console.log(`restrictions[${i}]`, restrictions.restrictions);
+            }
+          } else { Swal.fire(`Address Error!!`, `[No.${i + 1}]\n\n${address1[i]}`); }
+        }
+      }
+      unloadFn();
+      Swal.fire(`アドレスチェック完了！`, '');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // aggregate送信用ファイルを読み込み・エラーチェック
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const input_agg = document.getElementById('upload-file_agg');
+    const input_msig = document.getElementById('upload-file_msig');
+    const input_re = document.getElementById('upload-file_re');
+
+    const reader = new FileReader();
+    let address1 = [], address2 = [], amount1 = [], mosaic1 = [], message1 = [];
+    let file, file1;
+    let csv_check_agg = false, csv_check_msig = false, csv_check_re = false;
+
+    $('input[type="file"]').on('change', function () {
+      let f = $(this).prop('files')?.[0];
+      if (!f) return;
+      $('p1').text(f ? f.name : '選択されていません');
+      address1.length = 0;
+      address2.length = 0;
+      csv_check_agg = document.getElementById('csv_check_agg').checked;
+      csv_check_msig = document.getElementById('csv_check_msig').checked;
+      csv_check_re = document.getElementById('csv_check_re').checked;
+    });
+
+    input_agg.addEventListener('change', (e) => {
+      file1 = e.target.files[0];
+      if (!file1 || file1.type !== 'text/csv') return;
+      reader.onload = () => {
+        const arrays = { address1, amount1, mosaic1, message1 };
+        const rows = parseCSV(reader.result, arrays);
+        if (!rows) return;
+        address2 = rows;
+        // main.js (ES Module) からアクセスできるようにwindowに公開
+        window._agg_address1 = address1.slice();
+        window._agg_amount1 = amount1.slice();
+        window._agg_mosaic1 = mosaic1.slice();
+        window._agg_message1 = message1.slice();
+        (async () => {
+          if (csv_check_agg) await checkAddresses(address1, dispLoading_agg, removeLoading);
+          // チェック後も更新
+          window._agg_address1 = address1.slice();
+          console.log('address1=', address1, 'amount1=', amount1, 'mosaic1=', mosaic1, 'message1=', message1);
+        })();
+      };
+      reader.readAsText(file1);
+    });
+
+    input_msig.addEventListener('change', (e) => {
+      file1 = e.target.files[0];
+      if (!file1 || file1.type !== 'text/csv') return;
+      reader.onload = () => {
+        const arrays = { address1, amount1, mosaic1, message1 };
+        const rows = parseCSV(reader.result, arrays);
+        if (!rows) return;
+        address2 = rows;
+        (async () => {
+          if (csv_check_msig) await checkAddresses(address1, dispLoading_msig, removeLoading);
+          console.log('address1=', address1, 'amount1=', amount1, 'mosaic1=', mosaic1, 'message1=', message1);
+        })();
+      };
+      reader.readAsText(file1);
+    });
+
+    input_re.addEventListener('change', (e) => {
+      file1 = e.target.files[0];
+      if (!file1 || file1.type !== 'text/csv') return;
+      reader.onload = () => {
+        const arrays = { address1, amount1, mosaic1, message1 };
+        const rows = parseCSV(reader.result, arrays);
+        if (!rows) return;
+        address2 = rows;
+        (async () => {
+          if (csv_check_re) await checkAddresses(address1, dispLoading_re, removeLoading);
+          console.log('address1=', address1, 'amount1=', amount1, 'mosaic1=', mosaic1, 'message1=', message1);
+        })();
+      };
+      reader.readAsText(file1);
+    });
 
   </script>
 
