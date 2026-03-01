@@ -1462,47 +1462,9 @@ async function handleSSS_dona(activeAddress) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// エントリポイント
+// エントリポイント（v2: script.js と同じ 1000ms setTimeout 方式）
 // ─────────────────────────────────────────────────────────────────────────────
 
-function waitForSSS() {
-    let started = false;
-    const startMain = () => {
-        if (started) return;
-        started = true;
-        main();
-    };
-
-    // SSSWindow イベントも念のため待つ
-    window.addEventListener('SSSWindow', startMain, { once: true });
-
-    // 500ms 後に requestSSS を呼び、その後 isAllowedSSS() をポーリング
-    setTimeout(() => {
-        // requestSSS()：未リンクの場合は SSS ダイアログが開く
-        if (typeof window.requestSSS === 'function') window.requestSSS();
-
-        let count = 0;
-        const check = () => {
-            // isAllowedSSS() が true になったら起動
-            if (typeof window.isAllowedSSS === 'function' && window.isAllowedSSS()) {
-                startMain();
-                return;
-            }
-            count++;
-            // 最大 30 回（3 秒）ポーリング
-            if (count < 30) {
-                setTimeout(check, 100);
-            } else {
-                // タイムアウト: SSS 未インストール環境 or 未リンクのまま起動
-                startMain();
-            }
-        };
-        check();
-    }, 500);
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', waitForSSS);
-} else {
-    waitForSSS();
-}
+// v2 の script.js では setTimeout(() => { ... }, 1000) で起動していた
+// SSSWindow イベントは使用せず、1秒後に isAllowedSSS() をシンプルに確認する
+setTimeout(() => main(), 1000);
