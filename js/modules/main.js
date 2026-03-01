@@ -121,8 +121,13 @@ function getTransactionType(type) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function getAvailableNode() {
-    const NODEWATCH_URL =
-        'https://nodewatch.symbol.tools/api/symbol/nodes/peer?only_ssl=true&limit=10&order=random';
+    // SSS の activeAddress 先頭文字で mainnet(N) / testnet(T) を判定
+    const activeAddr = window.SSS?.activeAddress ?? '';
+    const isTestnet = activeAddr.charAt(0) === 'T';
+
+    const NODEWATCH_URL = isTestnet
+        ? 'https://nodewatch.symbol.tools/testnet/api/symbol/nodes/peer?only_ssl=true&limit=10&order=random'
+        : 'https://nodewatch.symbol.tools/api/symbol/nodes/peer?only_ssl=true&limit=10&order=random';
 
     const res = await fetch(NODEWATCH_URL);
     const nodes = await res.json();
