@@ -824,14 +824,37 @@ async function handleSSS(activeAddress) {
                 // SSS でメッセージを暗号化（v2互換: setMessage→requestSignEncription）
                 window.SSS.setMessage(message, recipientPubKey);
                 const encMsg = await window.SSS.requestSignEncription();
-                // v3: requestSignEncription は EncryptedMessage オブジェクトを返す
-                // .payload が hex 文字列の場合は Uint8Array に変換して 0x01 を先頭に付与
+                // SSS requestSignEncription の戻り値は実装バージョンによって異なる:
+                //   - Uint8Array: 0x01 + 暗号化バイト列（そのまま使用）
+                //   - string:     hex文字列（"01..." or "a3f5..."）
+                //   - object:     { payload: string } 形式 (v2互換)
+                console.log('[handleSSS] encMsg type:', typeof encMsg, encMsg);
+
                 if (encMsg instanceof Uint8Array) {
-                    msgData = encMsg; // 既に Uint8Array（0x01付き）
-                } else if (encMsg && encMsg.payload) {
-                    // v2互換 EncryptedMessage: payload が hex 文字列
-                    const hexBytes = encMsg.payload.match(/.{1,2}/g).map(b => parseInt(b, 16));
-                    msgData = new Uint8Array([0x01, ...hexBytes]);
+                    // 既に Uint8Array: 0x01プレフィックスの有無を確認して補完
+                    msgData = (encMsg[0] === 0x01)
+                        ? encMsg
+                        : new Uint8Array([0x01, ...encMsg]);
+
+                } else if (typeof encMsg === 'string' && encMsg.length > 0) {
+                    // hex文字列で返ってきた場合
+                    const hexStr = encMsg.replace(/^0x/i, ''); // "0x"プレフィックス除去
+                    const hexBytes = hexStr.match(/.{1,2}/g).map(b => parseInt(b, 16));
+                    // 先頭が 0x01（暗号化タイプ）でない場合は付与
+                    msgData = (hexBytes[0] === 0x01)
+                        ? new Uint8Array(hexBytes)
+                        : new Uint8Array([0x01, ...hexBytes]);
+
+                } else if (encMsg && typeof encMsg === 'object' && encMsg.payload) {
+                    // { payload: hex文字列 } 形式 (v2互換)
+                    const hexStr = encMsg.payload.replace(/^0x/i, '');
+                    const hexBytes = hexStr.match(/.{1,2}/g).map(b => parseInt(b, 16));
+                    msgData = (hexBytes[0] === 0x01)
+                        ? new Uint8Array(hexBytes)
+                        : new Uint8Array([0x01, ...hexBytes]);
+
+                } else {
+                    console.warn('[handleSSS] 暗号化メッセージの形式が不明。平文で送信します。', encMsg);
                 }
             }
         }
