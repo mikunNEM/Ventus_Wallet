@@ -948,7 +948,7 @@ async function handleSSS(activeAddress) {
 
         const signedPayload = await signAndAnnounce(tx);
         console.log('[handleSSS] 送信成功:', signedPayload);
-        Swal.fire({ title: '送信しました！', icon: 'success' });
+        // 送信成功通知はユニコーンポップアップに任せる（Swal は二重になるため省略）
     } catch (e) {
         console.error('[handleSSS] エラー詳細:', e?.name, e?.message, e);
         Swal.fire({ title: '送信失敗', text: e?.message ?? String(e), icon: 'error' });
