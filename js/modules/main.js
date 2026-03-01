@@ -674,6 +674,10 @@ async function main() {
     const node = await getAvailableNode();
     await initNetwork(node);
 
+    // SDK 初期化完了フラグをセット
+    // （SSSWindow がここより先に発火していた場合は initAccountAndUI を今すぐ呼ぶ）
+    _sdkReady = true;
+
     // index.html内の通常<script>からNodeURLを参照できるように公開
     window.ventus_NODE = NODE;
 
@@ -690,18 +694,19 @@ async function main() {
         dom_account_name.innerHTML = `<font color="#ff8c00">${window.SSS?.activeName}</font>`;
     }
 
-    // SSSWindow（リンク完了イベント）が来たらアカウント情報を再取得するリスナーを登録
-    window.addEventListener('SSSWindow', async () => {
-        console.log('[main] SSSWindow received, initializing account...');
+    // SSSWindow が SDK より先に発火していた場合 → 今すぐアカウント初期化
+    if (_sssWindowCaught) {
+        console.log('[main] SSSWindow 既に発火済み → initAccountAndUI()');
         await initAccountAndUI();
-    }, { once: true });
+        return;
+    }
 
     // 現時点で既にリンク済みならすぐにアカウント情報を取得
     const activeAddress = window.SSS?.activeAddress;
     if (!activeAddress) {
-        // 未リンク: SSS がない旨をUI に表示して待機
-        if (dom_account_name) dom_account_name.innerHTML = `<font color="gray">SSS未接続</font>`;
-        return; // アカウント依存の処理はスキップ（SSSWindow で再実行）
+        // 未リンク: UI に表示して待機（SSSWindow で initAccountAndUI が呼ばれる）
+        if (dom_account_name) dom_account_name.innerHTML = `<font color="gray">SSS未接続 - SSSをリンクしてください</font>`;
+        return;
     }
 
     // アカウント情報取得
@@ -1462,9 +1467,24 @@ async function handleSSS_dona(activeAddress) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// エントリポイント（v2: script.js と同じ 1000ms setTimeout 方式）
+// エントリポイント
 // ─────────────────────────────────────────────────────────────────────────────
 
-// v2 の script.js では setTimeout(() => { ... }, 1000) で起動していた
-// SSSWindow イベントは使用せず、1秒後に isAllowedSSS() をシンプルに確認する
+// SSSWindow リスナーを最初に登録しておく
+// （main() 内の await loadSDK() 中に SSSWindow が発火することがあるため）
+let _sssWindowCaught = false;
+let _sdkReady = false; // loadSDK + initNetwork 完了フラグ
+
+window.addEventListener('SSSWindow', async () => {
+    console.log('[SSSWindow] SSS ready!');
+    _sssWindowCaught = true;
+    if (_sdkReady) {
+        // SDK 初期化済み → アカウントだけ初期化
+        await initAccountAndUI();
+    }
+    // SDK 未初期化の場合は main() 内の activeAddress チェックが通るので何もしない
+    // （main() が最後まで走る）
+}, { once: true });
+
+// 1000ms 後に main() を起動（v2 の script.js と同様）
 setTimeout(() => main(), 1000);
