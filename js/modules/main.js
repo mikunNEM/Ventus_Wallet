@@ -31,7 +31,9 @@ import {
     buildHashLockTx,
     buildAccountMetadataEmbeddedTx, buildMosaicMetadataEmbeddedTx, buildNamespaceMetadataEmbeddedTx,
     buildMosaicDefinitionEmbeddedTxs,
+    buildMosaicSupplyChangeTx, buildMosaicRevocationTx, buildMosaicRevocationEmbeddedTx,
     buildRootNamespaceTx, buildSubNamespaceTx,
+    buildAddressAliasTx, buildMosaicAliasTx,
     buildMultisigModificationEmbeddedTx,
 } from './transactions.js';
 
@@ -751,6 +753,18 @@ async function main() {
     window.handleSSS_agg = () => handleSSS_agg(activeAddress);
     window.handleSSS_msig = () => handleSSS_msig(activeAddress);
 
+    // 追加機能（v3移植）
+    window.Onclick_mosaic = () => Onclick_mosaic(activeAddress);
+    window.mosaic_supply = () => mosaic_supply();
+    window.revoke_mosaic = () => revoke_mosaic(activeAddress);
+    window.Onclick_Namespace = () => Onclick_Namespace();
+    window.Onclick_subNamespace = () => Onclick_subNamespace();
+    window.alias_Link = () => alias_Link();
+    window.Metadata = () => Metadata(activeAddress);
+    window.Msig_account = () => Msig_account(activeAddress);
+    window.handleSSS_multisig = () => handleSSS_multisig(activeAddress);
+    window.handleSSS_dona = () => handleSSS_dona(activeAddress);
+
     console.log('[main] 初期化完了');
 }
 
@@ -914,11 +928,469 @@ async function handleSSS_agg(activeAddress) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// マルチシグ転送
+// マルチシグ転送（旧 handleSSS_msig → 今は Bonded 非対応のスタブ）
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handleSSS_msig(activeAddress) {
     console.log('[handleSSS_msig] v3実装');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// モザイク作成
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function Onclick_mosaic(activeAddress) {
+    const supplyAmount = Number(document.getElementById('SupplyAmount')?.value ?? 0);
+    const duration = BigInt(document.getElementById('Duration1')?.value ?? 0);
+    const divisibility = Number(document.getElementById('Divisibility')?.value ?? 0);
+    const supplyMutable = document.getElementById('Supply_M')?.checked ?? false;
+    const transferable = document.getElementById('Transferable')?.checked ?? true;
+    const restrictable = document.getElementById('Restrictable')?.checked ?? false;
+    const revokable = document.getElementById('Revokable')?.checked ?? false;
+
+    if (supplyAmount <= 0) {
+        Swal.fire({ title: '供給量を入力してください。', icon: 'warning' }); return;
+    }
+
+    try {
+        const signerPubKey = window.SSS.activePublicKey;
+        const supply = BigInt(Math.round(supplyAmount * Math.pow(10, divisibility)));
+
+        const { defTx, supplyTx } = buildMosaicDefinitionEmbeddedTxs(
+            supplyMutable, transferable, restrictable, revokable,
+            divisibility, duration, supply, signerPubKey
+        );
+
+        const aggregateTx = buildAggregateCompleteTx([defTx, supplyTx], signerPubKey, 0, 100);
+
+        const feeXym = Number(aggregateTx.fee.value) / 1_000_000;
+        const feeEl = document.getElementById('fee_mosaic');
+        if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
+
+        await signAndAnnounce(aggregateTx);
+        Swal.fire({ title: 'モザイク作成を送信しました！', icon: 'success' });
+    } catch (e) {
+        console.error('[Onclick_mosaic]', e);
+        Swal.fire({ title: 'モザイク作成失敗', text: e.message, icon: 'error' });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// モザイク供給量変更
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function mosaic_supply() {
+    const mosaicIdHex = document.querySelector('.select_sup')?.value ?? '';
+    const changeAmount = Number(document.getElementById('change_Amount')?.value ?? 0);
+    const isIncrease = document.getElementById('change_sup')?.checked ?? true;
+
+    if (!mosaicIdHex) {
+        Swal.fire({ title: 'モザイクを選択してください。', icon: 'warning' }); return;
+    }
+    if (changeAmount <= 0) {
+        Swal.fire({ title: '数量を入力してください。', icon: 'warning' }); return;
+    }
+
+    try {
+        const moInfo = await getMosaicInfo(mosaicIdHex);
+        const div = moInfo.divisibility;
+        const delta = BigInt(Math.round(changeAmount * Math.pow(10, div)));
+        const signerPubKey = window.SSS.activePublicKey;
+
+        const tx = buildMosaicSupplyChangeTx(mosaicIdHex, delta, isIncrease ? 'increase' : 'decrease', signerPubKey);
+
+        const feeXym = Number(tx.fee.value) / 1_000_000;
+        const feeEl = document.getElementById('fee_sup');
+        if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
+
+        await signAndAnnounce(tx);
+        Swal.fire({ title: '供給量変更を送信しました！', icon: 'success' });
+    } catch (e) {
+        console.error('[mosaic_supply]', e);
+        Swal.fire({ title: '供給量変更失敗', text: e.message, icon: 'error' });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// モザイク回収
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function revoke_mosaic(activeAddress) {
+    const isAggCheck = document.getElementById('re_agg_check')?.checked ?? false;
+    const mosaicIdHex = document.querySelector('.select_r')?.value ?? '';
+    const amountRaw = document.getElementById('re_amount')?.value ?? '0';
+    const signerPubKey = window.SSS.activePublicKey;
+
+    if (!mosaicIdHex) {
+        Swal.fire({ title: 'モザイクを選択してください。', icon: 'warning' }); return;
+    }
+
+    try {
+        if (!isAggCheck) {
+            // ─ 単体回収 ─
+            const holderAddress = (document.getElementById('holderAddress')?.value ?? '').trim();
+            if (!holderAddress) {
+                Swal.fire({ title: '回収元アドレスを入力してください。', icon: 'warning' }); return;
+            }
+            const moInfo = await getMosaicInfo(mosaicIdHex);
+            const amount = BigInt(Math.round(Number(amountRaw) * Math.pow(10, moInfo.divisibility)));
+
+            const tx = buildMosaicRevocationTx(holderAddress, mosaicIdHex, amount, signerPubKey);
+            const feeXym = Number(tx.fee.value) / 1_000_000;
+            const feeEl = document.getElementById('fee_rev');
+            if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
+
+            await signAndAnnounce(tx);
+            Swal.fire({ title: 'モザイク回収を送信しました！', icon: 'success' });
+        } else {
+            // ─ 一括回収（全保有者を API から取得して Aggregate Complete） ─
+            const pageNum = document.getElementById('page_num_holder1')?.value ?? 1;
+            const res = await fetchJson(new URL(
+                `/accounts?mosaicId=${mosaicIdHex}&orderBy=balance&order=desc&pageSize=100&pageNumber=${pageNum}`,
+                NODE
+            ));
+
+            const innerTxs = [];
+            for (const item of (res.data ?? [])) {
+                const acc = item.account;
+                const mosaic = (acc.mosaics ?? []).find(m => m.id.toUpperCase() === mosaicIdHex.toUpperCase());
+                if (!mosaic) continue;
+                const holderAddr = hexToAddress(acc.address);
+                if (holderAddr === activeAddress) continue; // 自分は除外
+                innerTxs.push(buildMosaicRevocationEmbeddedTx(holderAddr, mosaicIdHex, BigInt(mosaic.amount), signerPubKey));
+            }
+
+            if (innerTxs.length === 0) {
+                Swal.fire({ title: '回収対象がありません。', icon: 'info' }); return;
+            }
+
+            const aggregateTx = buildAggregateCompleteTx(innerTxs, signerPubKey, 0, 100);
+            const feeXym = Number(aggregateTx.fee.value) / 1_000_000;
+            const feeEl = document.getElementById('fee_rev');
+            if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
+
+            await signAndAnnounce(aggregateTx);
+            Swal.fire({ title: 'モザイク一括回収を送信しました！', icon: 'success' });
+        }
+    } catch (e) {
+        console.error('[revoke_mosaic]', e);
+        Swal.fire({ title: 'モザイク回収失敗', text: e.message, icon: 'error' });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ルートネームスペース登録
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function Onclick_Namespace() {
+    const namespaceName = (document.getElementById('Namespace')?.value ?? '').trim().toLowerCase();
+    const duration = Number(document.getElementById('Duration2')?.value ?? 0);
+    const signerPubKey = window.SSS.activePublicKey;
+
+    if (!namespaceName) {
+        Swal.fire({ title: 'ネームスペース名を入力してください。', icon: 'warning' }); return;
+    }
+    if (duration < 86400 || duration > 5256000) {
+        Swal.fire({ title: '有効期限が無効です（86400〜5256000 ブロック）', icon: 'warning' }); return;
+    }
+
+    try {
+        const tx = buildRootNamespaceTx(namespaceName, duration, signerPubKey);
+        const feeXym = Number(tx.fee.value) / 1_000_000;
+        const feeEl = document.getElementById('fee_n');
+        if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
+
+        await signAndAnnounce(tx);
+        Swal.fire({ title: 'ネームスペース登録を送信しました！', icon: 'success' });
+    } catch (e) {
+        console.error('[Onclick_Namespace]', e);
+        Swal.fire({ title: 'ネームスペース登録失敗', text: e.message, icon: 'error' });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// サブネームスペース登録
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function Onclick_subNamespace() {
+    const subName = (document.getElementById('subNamespace')?.value ?? '').trim().toLowerCase();
+    const parentName = (document.getElementById('parentNamespace')?.value ?? '').trim().toLowerCase();
+    const signerPubKey = window.SSS.activePublicKey;
+
+    if (!subName || !parentName) {
+        Swal.fire({ title: 'ネームスペース名を入力してください。', icon: 'warning' }); return;
+    }
+
+    try {
+        // 親NSのIDを取得する
+        const res = await fetchJson(new URL(
+            `/namespaces?level0=${encodeURIComponent(parentName)}&pageSize=1`, NODE
+        ));
+        if (!res.data || res.data.length === 0) {
+            Swal.fire({ title: '親ネームスペースが見つかりません。', icon: 'warning' }); return;
+        }
+        const parentId = res.data[0].namespace.id;
+
+        const tx = buildSubNamespaceTx(subName, parentId, signerPubKey);
+        const feeXym = Number(tx.fee.value) / 1_000_000;
+        const feeEl = document.getElementById('fee_sn');
+        if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
+
+        await signAndAnnounce(tx);
+        Swal.fire({ title: 'サブネームスペース登録を送信しました！', icon: 'success' });
+    } catch (e) {
+        console.error('[Onclick_subNamespace]', e);
+        Swal.fire({ title: 'サブネームスペース登録失敗', text: e.message, icon: 'error' });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// エイリアスリンク
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function alias_Link() {
+    const linkType = document.getElementById('alias_type')?.value ?? 'address'; // 'address' or 'mosaic'
+    const isLink = document.getElementById('alias_link_check')?.checked ?? true;
+    const action = isLink ? 'link' : 'unlink';
+    const nsName = (document.getElementById('alias_namespace')?.value ?? '').trim().toLowerCase();
+    const signerPubKey = window.SSS.activePublicKey;
+
+    if (!nsName) {
+        Swal.fire({ title: 'ネームスペース名を入力してください。', icon: 'warning' }); return;
+    }
+
+    try {
+        // NSのIDを取得する
+        const res = await fetchJson(new URL(
+            `/namespaces?level0=${encodeURIComponent(nsName)}&pageSize=1`, NODE
+        ));
+        if (!res.data || res.data.length === 0) {
+            Swal.fire({ title: 'ネームスペースが見つかりません。', icon: 'warning' }); return;
+        }
+        const nsId = res.data[0].namespace.id;
+
+        let tx;
+        if (linkType === 'address') {
+            const address = (document.getElementById('alias_address')?.value ?? '').trim();
+            if (!address) {
+                Swal.fire({ title: 'アドレスを入力してください。', icon: 'warning' }); return;
+            }
+            tx = buildAddressAliasTx(action, nsId, address, signerPubKey);
+        } else {
+            const mosaicIdHex = document.querySelector('.select_alias_mosaic')?.value ?? '';
+            if (!mosaicIdHex) {
+                Swal.fire({ title: 'モザイクを選択してください。', icon: 'warning' }); return;
+            }
+            tx = buildMosaicAliasTx(action, nsId, mosaicIdHex, signerPubKey);
+        }
+
+        const feeXym = Number(tx.fee.value) / 1_000_000;
+        const feeEl = document.getElementById('fee_L');
+        if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
+
+        await signAndAnnounce(tx);
+        Swal.fire({ title: `エイリアスリンク（${action}）を送信しました！`, icon: 'success' });
+    } catch (e) {
+        console.error('[alias_Link]', e);
+        Swal.fire({ title: 'エイリアスリンク失敗', text: e.message, icon: 'error' });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// メタデータ 登録 / 更新
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function Metadata(activeAddress) {
+    const metaKeyStr = (document.getElementById('Meta_key')?.value ?? '').trim();
+    const metaValue = (document.getElementById('Meta_value')?.value ?? '').trim();
+    const metaType = Number(document.querySelector('.select_Meta')?.value ?? 0); // 0=Account, 1=Mosaic, 2=NS
+    const signerPubKey = window.SSS.activePublicKey;
+
+    if (!metaKeyStr) {
+        Swal.fire({ title: 'メタデータキーを入力してください。', icon: 'warning' }); return;
+    }
+    if (!metaValue) {
+        Swal.fire({ title: 'メタデータ値を入力してください。', icon: 'warning' }); return;
+    }
+
+    try {
+        const key = sdkSymbol.metadataGenerateKey(metaKeyStr);
+        const newValue = new TextEncoder().encode(metaValue);
+
+        // 既存のメタデータを取得して差分計算
+        const params = { targetAddress: activeAddress, scopedMetadataKey: key.toString(16).toUpperCase(), pageSize: 1 };
+        let oldValue = null;
+        try {
+            const existRes = await fetchJson(new URL(`/metadata?${new URLSearchParams(params)}`, NODE));
+            if (existRes.data && existRes.data.length > 0) {
+                oldValue = new TextEncoder().encode(existRes.data[0].metadataEntry.value);
+            }
+        } catch { }
+
+        let innerTx;
+        if (metaType === 0) {
+            // Account Metadata
+            innerTx = buildAccountMetadataEmbeddedTx(activeAddress, key, newValue, oldValue, signerPubKey);
+        } else if (metaType === 1) {
+            // Mosaic Metadata
+            const mosaicIdHex = document.querySelector('.select_Meta_mosaic')?.value ?? '';
+            if (!mosaicIdHex) {
+                Swal.fire({ title: 'モザイクを選択してください。', icon: 'warning' }); return;
+            }
+            innerTx = buildMosaicMetadataEmbeddedTx(activeAddress, mosaicIdHex, key, newValue, oldValue, signerPubKey);
+        } else {
+            // Namespace Metadata
+            const nsIdHex = document.querySelector('.select_Meta_ns')?.value ?? '';
+            if (!nsIdHex) {
+                Swal.fire({ title: 'ネームスペースを選択してください。', icon: 'warning' }); return;
+            }
+            innerTx = buildNamespaceMetadataEmbeddedTx(activeAddress, nsIdHex, key, newValue, oldValue, signerPubKey);
+        }
+
+        const aggregateTx = buildAggregateCompleteTx([innerTx], signerPubKey, 0, 100);
+        const feeXym = Number(aggregateTx.fee.value) / 1_000_000;
+        const feeEl = document.getElementById('fee_Meta');
+        if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
+
+        await signAndAnnounce(aggregateTx);
+        Swal.fire({ title: 'メタデータ登録を送信しました！', icon: 'success' });
+    } catch (e) {
+        console.error('[Metadata]', e);
+        Swal.fire({ title: 'メタデータ登録失敗', text: e.message, icon: 'error' });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// マルチシグアカウント作成
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function Msig_account(activeAddress) {
+    const minApproval = Number(document.getElementById('min_sig')?.value ?? 1);
+    const minRemoval = Number(document.getElementById('min_del_sig')?.value ?? 1);
+    const signerPubKey = window.SSS.activePublicKey;
+
+    // 連署者アドレスを取得（複数行 id="cosign_addr_N" の入力欄）
+    const addAddresses = [];
+    for (let i = 1; i <= 25; i++) {
+        const el = document.getElementById(`cosign_addr_${i}`);
+        if (!el || !el.value.trim()) break;
+        addAddresses.push(el.value.trim());
+    }
+
+    // フォールバック: 1行のみの入力欄
+    if (addAddresses.length === 0) {
+        const el = document.getElementById('cosign_addr');
+        if (el && el.value.trim()) {
+            el.value.trim().split(/\n|,/).forEach(a => {
+                const addr = a.trim();
+                if (addr) addAddresses.push(addr);
+            });
+        }
+    }
+
+    if (addAddresses.length === 0) {
+        Swal.fire({ title: '連署者アドレスを入力してください。', icon: 'warning' }); return;
+    }
+
+    try {
+        const innerTx = buildMultisigModificationEmbeddedTx(
+            minApproval, minRemoval, addAddresses, [], signerPubKey
+        );
+        const aggregateTx = buildAggregateCompleteTx([innerTx], signerPubKey, addAddresses.length, 100);
+
+        const feeXym = Number(aggregateTx.fee.value) / 1_000_000;
+        const feeEl = document.getElementById('fee_Msig');
+        if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
+
+        await signAndAnnounce(aggregateTx);
+        Swal.fire({ title: 'マルチシグアカウント作成を送信しました！', icon: 'success' });
+    } catch (e) {
+        console.error('[Msig_account]', e);
+        Swal.fire({ title: 'マルチシグアカウント作成失敗', text: e.message, icon: 'error' });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// マルチシグアカウントからの転送
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function handleSSS_multisig(activeAddress) {
+    const multisigAddr = document.querySelector('.select_msig')?.value ?? '';
+    const toAddress = (document.getElementById('multisig_to')?.value ?? '').trim();
+    const mosaicIdHex = document.querySelector('.select_m2')?.value ?? '';
+    const amountRaw = document.getElementById('multisig_amount')?.value ?? '0';
+    const message = document.getElementById('multisig_message2')?.value ?? '';
+    const signerPubKey = window.SSS.activePublicKey;
+
+    if (!toAddress) {
+        Swal.fire({ title: '宛先アドレスを入力してください。', icon: 'warning' }); return;
+    }
+    if (!mosaicIdHex) {
+        Swal.fire({ title: 'モザイクを選択してください。', icon: 'warning' }); return;
+    }
+    if (byteLengthUTF8(message) > 1023) {
+        Swal.fire({ title: `メッセージが${byteLengthUTF8(message)}バイト。1023バイト以下にしてください。` }); return;
+    }
+
+    try {
+        const moInfo = await getMosaicInfo(mosaicIdHex);
+        const amount = BigInt(Math.round(Number(amountRaw) * Math.pow(10, moInfo.divisibility)));
+
+        // マルチシグから送信: 転送Txを embedded に入れて AggregateBonded を組む
+        // minApproval が 1 の場合は AggregateComplete でも可（とりあえず Bonded で統一）
+        const innerTx = buildEmbeddedTransferTx(toAddress, mosaicIdHex, amount, message, signerPubKey);
+        const aggregateBonded = buildAggregateBondedTx([innerTx], signerPubKey, 1, 100);
+
+        const feeXym = Number(aggregateBonded.fee.value) / 1_000_000;
+        const feeEl = document.getElementById('fee_multisig');
+        if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
+
+        // 1. まず Hash Lock Tx をアナウンス
+        const bondedHash = sdkCore.utils.uint8ToHex(
+            facade.hashTransaction(aggregateBonded).bytes
+        );
+        const hashLockTx = buildHashLockTx(bondedHash, signerPubKey, XYM_ID);
+        await signAndAnnounce(hashLockTx);
+
+        // 2. WebSocket で confirmed を待って Bonded をアナウンス
+        // （簡易版: Hash Lock 確認後に手動で Bonded を送信するため、少し待機）
+        Swal.fire({ title: 'Hash Lock 送信済み', text: '数秒後に Aggregate Bonded を送信します...', icon: 'info', timer: 4000, showConfirmButton: false });
+        await new Promise(r => setTimeout(r, 4500));
+
+        await signAndAnnounce(aggregateBonded, true);
+        Swal.fire({ title: 'マルチシグ転送を送信しました！', icon: 'success' });
+    } catch (e) {
+        console.error('[handleSSS_multisig]', e);
+        Swal.fire({ title: 'マルチシグ転送失敗', text: e.message, icon: 'error' });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 開発者への寄付
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function handleSSS_dona(activeAddress) {
+    // v2互換: メインネットの寄付先アドレスは固定、テストネットは自己アドレス
+    const DONA_ADDRESS = networkType === 104
+        ? 'NBOGLHXSI7FDRAO2CMZV5PQZ5UHZ3IED67ULPSY'  // 開発者 (mainnet)
+        : activeAddress;                               // テストネットは自分に送信（テスト用）
+
+    const amountRaw = document.getElementById('dona_amount')?.value ?? '0';
+    const message = document.getElementById('dona_message')?.value ?? 'Donation from Ventus Wallet';
+
+    if (Number(amountRaw) <= 0) {
+        Swal.fire({ title: '数量を入力してください。', icon: 'warning' }); return;
+    }
+
+    try {
+        const amount = BigInt(Math.round(Number(amountRaw) * 1_000_000)); // XYM は divisibility=6
+        const tx = buildTransferTx(DONA_ADDRESS, XYM_ID, amount, message, window.SSS.activePublicKey);
+        await signAndAnnounce(tx);
+        Swal.fire({ title: 'ご支援ありがとうございます！🎉', icon: 'success' });
+    } catch (e) {
+        console.error('[handleSSS_dona]', e);
+        Swal.fire({ title: '送信失敗', text: e.message, icon: 'error' });
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

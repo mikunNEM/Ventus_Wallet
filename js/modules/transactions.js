@@ -311,6 +311,131 @@ export function buildSubNamespaceTx(subName, parentNamespaceIdHex, signerPubKey,
 // マルチシグ変更
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// モザイク供給量変更（単体）
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * モザイク供給量変更 Tx を作成する（単体・非 embedded）
+ * v2: sym.MosaicSupplyChangeTransaction.create(...)
+ *
+ * @param {string} mosaicIdHex
+ * @param {bigint} delta         - 変更量（絶対量）
+ * @param {'increase'|'decrease'} action
+ * @param {string} signerPubKey
+ * @param {number} feeMultiplier
+ */
+export function buildMosaicSupplyChangeTx(mosaicIdHex, delta, action, signerPubKey, feeMultiplier = 100) {
+    const actionModel = action === 'increase'
+        ? sdkSymbol.models.MosaicSupplyChangeAction.INCREASE
+        : sdkSymbol.models.MosaicSupplyChangeAction.DECREASE;
+
+    const descriptor = new sdkSymbol.descriptors.MosaicSupplyChangeTransactionV1Descriptor(
+        new sdkSymbol.models.UnresolvedMosaicId(BigInt('0x' + mosaicIdHex)),
+        actionModel,
+        new sdkSymbol.models.Amount(BigInt(delta))
+    );
+    return facade.createTransactionFromTypedDescriptor(descriptor, signerPubKey, feeMultiplier, DEADLINE_SEC);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// モザイク回収
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * モザイク回収 Tx を作成する（単体・非 embedded）
+ * v2: sym.MosaicSupplyRevocationTransaction.create(...).setMaxFee(100)
+ *
+ * @param {string} sourceAddress  - 回収元アドレス
+ * @param {string} mosaicIdHex
+ * @param {bigint} amount
+ * @param {string} signerPubKey
+ * @param {number} feeMultiplier
+ */
+export function buildMosaicRevocationTx(sourceAddress, mosaicIdHex, amount, signerPubKey, feeMultiplier = 100) {
+    const descriptor = new sdkSymbol.descriptors.MosaicSupplyRevocationTransactionV1Descriptor(
+        new sdkSymbol.Address(sourceAddress),
+        new sdkSymbol.descriptors.UnresolvedMosaicDescriptor(
+            new sdkSymbol.models.UnresolvedMosaicId(BigInt('0x' + mosaicIdHex)),
+            new sdkSymbol.models.Amount(BigInt(amount))
+        )
+    );
+    return facade.createTransactionFromTypedDescriptor(descriptor, signerPubKey, feeMultiplier, DEADLINE_SEC);
+}
+
+/**
+ * モザイク回収の埋め込みTx を作成する（Aggregate 内部用）
+ *
+ * @param {string} sourceAddress  - 回収元アドレス
+ * @param {string} mosaicIdHex
+ * @param {bigint} amount
+ * @param {string} signerPubKey
+ */
+export function buildMosaicRevocationEmbeddedTx(sourceAddress, mosaicIdHex, amount, signerPubKey) {
+    const descriptor = new sdkSymbol.descriptors.MosaicSupplyRevocationTransactionV1Descriptor(
+        new sdkSymbol.Address(sourceAddress),
+        new sdkSymbol.descriptors.UnresolvedMosaicDescriptor(
+            new sdkSymbol.models.UnresolvedMosaicId(BigInt('0x' + mosaicIdHex)),
+            new sdkSymbol.models.Amount(BigInt(amount))
+        )
+    );
+    return facade.createEmbeddedTransactionFromTypedDescriptor(descriptor, signerPubKey);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// エイリアス（Address / Mosaic）
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * アドレスエイリアス Tx を作成する
+ * v2: sym.AddressAliasTransaction.create(...)
+ *
+ * @param {'link'|'unlink'} action
+ * @param {string} namespaceIdHex
+ * @param {string} address             - 39文字のSymbolアドレス
+ * @param {string} signerPubKey
+ * @param {number} feeMultiplier
+ */
+export function buildAddressAliasTx(action, namespaceIdHex, address, signerPubKey, feeMultiplier = 100) {
+    const actionModel = action === 'link'
+        ? sdkSymbol.models.AliasAction.LINK
+        : sdkSymbol.models.AliasAction.UNLINK;
+
+    const descriptor = new sdkSymbol.descriptors.AddressAliasTransactionV1Descriptor(
+        new sdkSymbol.models.NamespaceId(BigInt('0x' + namespaceIdHex)),
+        new sdkSymbol.Address(address),
+        actionModel
+    );
+    return facade.createTransactionFromTypedDescriptor(descriptor, signerPubKey, feeMultiplier, DEADLINE_SEC);
+}
+
+/**
+ * モザイクエイリアス Tx を作成する
+ * v2: sym.MosaicAliasTransaction.create(...)
+ *
+ * @param {'link'|'unlink'} action
+ * @param {string} namespaceIdHex
+ * @param {string} mosaicIdHex
+ * @param {string} signerPubKey
+ * @param {number} feeMultiplier
+ */
+export function buildMosaicAliasTx(action, namespaceIdHex, mosaicIdHex, signerPubKey, feeMultiplier = 100) {
+    const actionModel = action === 'link'
+        ? sdkSymbol.models.AliasAction.LINK
+        : sdkSymbol.models.AliasAction.UNLINK;
+
+    const descriptor = new sdkSymbol.descriptors.MosaicAliasTransactionV1Descriptor(
+        new sdkSymbol.models.NamespaceId(BigInt('0x' + namespaceIdHex)),
+        new sdkSymbol.models.UnresolvedMosaicId(BigInt('0x' + mosaicIdHex)),
+        actionModel
+    );
+    return facade.createTransactionFromTypedDescriptor(descriptor, signerPubKey, feeMultiplier, DEADLINE_SEC);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// マルチシグ変更
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * マルチシグアカウント変更の埋め込みTxを作成する
  * v2: sym.MultisigAccountModificationTransaction.create(...)
