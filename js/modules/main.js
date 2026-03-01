@@ -1424,22 +1424,30 @@ async function handleSSS_dona(activeAddress) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // SSS の準備が完了したら main() を呼ぶ
-// ポイント: isAllowedSSS が存在しても最初は false を返すため短絡しない
-// SSSWindow イベントは SSS が本当に準備完了したときだけ発火する
+// SSS ドキュメント推奨: setTimeout で SSS 注入を待った後に requestSSS() → SSSWindow 待ち
 function waitForSSS() {
     let started = false;
     const startMain = () => {
-        if (started) return; // 二重起動防止
+        if (started) return;
         started = true;
         main();
     };
 
-    // 常に SSSWindow を待つ（isAllowedSSS 存在チェックで短絡しない）
+    // SSSWindow を常に待つ（SSS が準備完了したときに発火する）
     window.addEventListener('SSSWindow', startMain, { once: true });
 
-    // フォールバック: 3秒後に SSSWindow が来なければ起動
-    // （SSS 未インストール / 未リンク 環境用）
-    setTimeout(startMain, 3000);
+    // SSS の注入を少し待ってから requestSSS() を呼ぶ
+    // requestSSS() → SSS Extension が SSSWindow を発火する
+    setTimeout(() => {
+        if (typeof window.requestSSS === 'function') {
+            window.requestSSS();
+        }
+        // requestSSS が存在しない（SSS 未インストール）場合のフォールバック
+        // または既にリンク済みで SSSWindow が既に発火済みの場合のフォールバック
+        setTimeout(() => {
+            if (!started) startMain();
+        }, 2000);
+    }, 500);
 }
 
 if (document.readyState === 'loading') {
