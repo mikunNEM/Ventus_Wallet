@@ -1423,8 +1423,6 @@ async function handleSSS_dona(activeAddress) {
 // エントリポイント
 // ─────────────────────────────────────────────────────────────────────────────
 
-// SSS の準備が完了したら main() を呼ぶ
-// SSS ドキュメント推奨: setTimeout で SSS 注入を待った後に requestSSS() → SSSWindow 待ち
 function waitForSSS() {
     let started = false;
     const startMain = () => {
@@ -1433,20 +1431,31 @@ function waitForSSS() {
         main();
     };
 
-    // SSSWindow を常に待つ（SSS が準備完了したときに発火する）
+    // SSSWindow イベントも念のため待つ
     window.addEventListener('SSSWindow', startMain, { once: true });
 
-    // SSS の注入を少し待ってから requestSSS() を呼ぶ
-    // requestSSS() → SSS Extension が SSSWindow を発火する
+    // 500ms 後に requestSSS を呼び、その後 isAllowedSSS() をポーリング
     setTimeout(() => {
-        if (typeof window.requestSSS === 'function') {
-            window.requestSSS();
-        }
-        // requestSSS が存在しない（SSS 未インストール）場合のフォールバック
-        // または既にリンク済みで SSSWindow が既に発火済みの場合のフォールバック
-        setTimeout(() => {
-            if (!started) startMain();
-        }, 2000);
+        // requestSSS()：未リンクの場合は SSS ダイアログが開く
+        if (typeof window.requestSSS === 'function') window.requestSSS();
+
+        let count = 0;
+        const check = () => {
+            // isAllowedSSS() が true になったら起動
+            if (typeof window.isAllowedSSS === 'function' && window.isAllowedSSS()) {
+                startMain();
+                return;
+            }
+            count++;
+            // 最大 30 回（3 秒）ポーリング
+            if (count < 30) {
+                setTimeout(check, 100);
+            } else {
+                // タイムアウト: SSS 未インストール環境 or 未リンクのまま起動
+                startMain();
+            }
+        };
+        check();
     }, 500);
 }
 
