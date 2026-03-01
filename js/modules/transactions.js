@@ -25,9 +25,21 @@ const DEADLINE_SEC = 60 * 60 * 2; // 2時間
  */
 export async function signAndAnnounce(tx, isBonded = false) {
     const payload = sdkCore.utils.uint8ToHex(tx.serialize());
+    console.log('[signAndAnnounce] payload length:', payload.length);
     window.SSS.setTransactionByPayload(payload);
     const signedPayload = await window.SSS.requestSign();
-    await announceTransaction(signedPayload.payload, isBonded);
+    console.log('[signAndAnnounce] signedPayload:', typeof signedPayload, signedPayload);
+
+    // requestSign() の戻り値は string または { payload: string } のどちらかの実装がある
+    const signedHex = (typeof signedPayload === 'string')
+        ? signedPayload
+        : signedPayload?.payload;
+
+    if (!signedHex) {
+        throw new Error('SSS requestSign: 署名済みペイロードが取得できませんでした');
+    }
+
+    await announceTransaction(signedHex, isBonded);
     return signedPayload;
 }
 
