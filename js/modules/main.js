@@ -859,12 +859,18 @@ async function handleSSS(activeAddress) {
             }
         }
 
+        // 暗号化した場合、SSS の1つ目のダイアログが完全に閉じるのを待つ
+        // （直後に requestSign を呼ぶと "not signed" エラーになる race condition の回避）
+        if (isEncrypted && message) {
+            await new Promise(r => setTimeout(r, 600));
+        }
+
         console.log('[handleSSS] msgData:', msgData instanceof Uint8Array
             ? '[Uint8Array] ' + Array.from(msgData).map(b => b.toString(16).padStart(2, '0')).join(' ')
             : msgData);
 
         const tx = buildTransferTx(toAddress, mosaicIdHex, amount, msgData, window.SSS.activePublicKey);
-        console.log('[handleSSS] tx built. fee:', tx.fee?.value, 'msgLen:', tx.message?.data?.length ?? '?');
+        console.log('[handleSSS] tx built. fee:', tx.fee?.value);
 
         const signedPayload = await signAndAnnounce(tx);
         console.log('[handleSSS] 送信成功:', signedPayload);
