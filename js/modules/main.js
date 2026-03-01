@@ -1423,9 +1423,26 @@ async function handleSSS_dona(activeAddress) {
 // エントリポイント
 // ─────────────────────────────────────────────────────────────────────────────
 
-// SSS と ページ読み込みを待ってから初期化
+// SSS の準備完了イベント "SSSWindow" を待ってから初期化する
+// SSSWindow が既に発火済み（isAllowedSSS が存在する）場合は即実行する
+function waitForSSS() {
+    if (typeof window.isAllowedSSS === 'function') {
+        // 既に SSS 拡張機能が読み込み済み
+        main();
+    } else {
+        // SSSWindow イベントを待つ
+        window.addEventListener('SSSWindow', () => main(), { once: true });
+        // タイムアウト: SSS なしでも 3 秒後に起動（SSS を使わない場合のフォールバック）
+        setTimeout(() => {
+            if (typeof window.isAllowedSSS !== 'function') {
+                main();
+            }
+        }, 3000);
+    }
+}
+
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(main, 500));
+    document.addEventListener('DOMContentLoaded', waitForSSS);
 } else {
-    setTimeout(main, 500);
+    waitForSSS();
 }
