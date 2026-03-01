@@ -96,6 +96,24 @@ function Onclick_Copy(copyText) {
     setTimeout(() => msg.replaceWith(btn), 700);
 }
 
+// v2 の Onclick_Decryption と同等（setEncryptedMessage + requestSignDecription）
+async function Onclick_Decryption(senderPubKey, encryptedHex) {
+    console.log('[Onclick_Decryption] senderPubKey:', senderPubKey);
+    console.log('[Onclick_Decryption] encryptedHex:', encryptedHex);
+    try {
+        window.SSS.setEncryptedMessage(encryptedHex, senderPubKey);
+        const decrypted = await window.SSS.requestSignDecription();
+        console.log('[Onclick_Decryption] decrypted:', decrypted);
+        Swal.fire({
+            html: `復号化メッセージ<br>< Decrypted Message ><br><br>
+                   <p style="font-size: 24px;"><font color="blue">${decrypted}</font></p>`
+        });
+    } catch (e) {
+        console.error('[Onclick_Decryption] error:', e);
+        Swal.fire({ title: '復号失敗', text: e?.message ?? String(e), icon: 'error' });
+    }
+}
+
 function transaction_info(url) {
     window.open(url);
 }
@@ -565,19 +583,42 @@ async function showTransactions(activeAddress, pageNumber) {
             }
 
             // メッセージ
+            // v3 REST API: tx.message は hex 文字列 "01xxxx..."(暗号化) or "00xxxx..."(平文)
+            // または旧スキーマ: { type: 0|1, payload: "hex..." }
             const msgPayload = tx.message ?? '';
-            const msgType = typeof msgPayload === 'object' ? (msgPayload.type ?? 0) : 0;
-            let msgHex = typeof msgPayload === 'object' ? (msgPayload.payload ?? '') : msgPayload;
+            let msgType, msgHex;
+            if (typeof msgPayload === 'object') {
+                msgType = msgPayload.type ?? 0;
+                msgHex = msgPayload.payload ?? '';
+            } else if (typeof msgPayload === 'string' && msgPayload.length >= 2) {
+                msgType = parseInt(msgPayload.slice(0, 2), 16); // 先頭1バイト = タイプ
+                msgHex = msgPayload.slice(2);                  // 残り = 本文
+            } else {
+                msgType = 0;
+                msgHex = '';
+            }
+
             const dom_message = document.createElement('div');
             dom_message.style.fontFamily = 'Hiragino Maru Gothic ProN W4';
+
             if (msgType === 1) {
+                // 暗号化メッセージ
+                const senderPubKey = tx.signerPublicKey ?? tx.signerAddress ?? '';
                 const dom_enc = document.createElement('div');
-                dom_enc.innerHTML = `<font color="#ff00ff"><strong></br><ul class="decryption">\u6697\u53F7\u5316\u30E1\u30C3\u30BB\u30FC\u30B8</strong>\u3000< Encrypted Message ></font>`;
+                dom_enc.innerHTML = `<font color="#ff00ff"><strong><br>暗号化メッセージ &nbsp;< Encrypted Message ></strong></font>`;
                 dom_tx.appendChild(dom_enc);
-                dom_message.innerHTML = `<font color="#4169e1">[\u6697\u53F7\u5316\u30E1\u30C3\u30BB\u30FC\u30B8]</font>`;
+
+                // 復号ボタン（v2 の Onclick_Decryption と同等）
+                const dom_dec_btn = document.createElement('button');
+                dom_dec_btn.type = 'button';
+                dom_dec_btn.textContent = '🔓 復号する';
+                dom_dec_btn.style.cssText = 'margin:4px 0; padding:4px 12px; cursor:pointer;';
+                dom_dec_btn.onclick = () => Onclick_Decryption(senderPubKey, msgHex);
+                dom_tx.appendChild(dom_dec_btn);
+
+                dom_message.innerHTML = `<font color="#4169e1">[暗号化メッセージ]</font>`;
             } else if (msgHex) {
-                // v3: メッセージはhex文字列。先頭2文字(00)を除いてUTF-8デコード
-                if (msgHex.startsWith('00')) msgHex = msgHex.slice(2);
+                // 平文メッセージ（hex → UTF-8 デコード）
                 let displayMsg = msgHex;
                 try {
                     const bytes = new Uint8Array(msgHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
