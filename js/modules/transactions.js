@@ -24,9 +24,11 @@ const DEADLINE_SEC = 60 * 60 * 2; // 2時間
  * @returns {Promise<{hash: string, payload: string}>}
  */
 export async function signAndAnnounce(tx, isBonded = false) {
-    const payload = sdkCore.utils.uint8ToHex(tx.serialize());
-    console.log('[signAndAnnounce] payload length:', payload.length);
-    window.SSS.setTransactionByPayload(payload);
+    // SSS は setTransactionByPayload に hex 文字列を期待する（内部でhexToUint8を呼ぶため）
+    // Uint8Arrayをそのまま渡すとJS側で"248,0,..."に変換されてエラーになる
+    window.SSS.setTransactionByPayload(sdkCore.utils.uint8ToHex(tx.serialize()));
+    console.log('[signAndAnnounce] setTransactionByPayload(hex) called');
+
     const signedPayload = await window.SSS.requestSign();
     console.log('[signAndAnnounce] signedPayload:', typeof signedPayload, signedPayload);
 
@@ -155,13 +157,21 @@ export function buildAggregateBondedTx(embeddedTxs, signerPubKey, cosigCount = 1
  * @param {string} xymMosaicIdHex      - XYMのモザイクID
  */
 export function buildHashLockTx(bondedTxHash, signerPubKey, xymMosaicIdHex, feeMultiplier = 100) {
+    // bondedTxHash: hex string (64文字) → Uint8Array に変換して Hash256 に渡す
+    const hash256 = new sdkCore.Hash256(sdkCore.utils.hexToUint8(bondedTxHash));
+
+    // v3ドキュメント準拠: XYMは "symbol.xym" のnamespace IDを使った未解決形式で指定
+    // (解決済みのモザイクIDを使うとSSS拡張がNOT FOUNDを表示してSIGNできない)
+    const namespaceIds = sdkSymbol.generateNamespacePath('symbol.xym');
+    const xymNamespaceId = namespaceIds[namespaceIds.length - 1];
+
     const descriptor = new sdkSymbol.descriptors.HashLockTransactionV1Descriptor(
         new sdkSymbol.descriptors.UnresolvedMosaicDescriptor(
-            new sdkSymbol.models.UnresolvedMosaicId(BigInt('0x' + xymMosaicIdHex)),
+            new sdkSymbol.models.UnresolvedMosaicId(xymNamespaceId),
             new sdkSymbol.models.Amount(10_000_000n)  // 固定値: 10 XYM
         ),
-        new sdkSymbol.models.BlockDuration(5760n),  // 固定値: 5760ブロック
-        new sdkCore.Hash256(bondedTxHash)
+        new sdkSymbol.models.BlockDuration(5760n),  // 固定値: 5760ブロック ≒ 48時間（最大値）
+        hash256
     );
     return facade.createTransactionFromTypedDescriptor(
         descriptor, signerPubKey, feeMultiplier, DEADLINE_SEC
@@ -266,27 +276,44 @@ export function buildMosaicDefinitionEmbeddedTxs(
     const address = new sdkSymbol.Address(
         facade.network.publicKeyToAddress(new sdkCore.PublicKey(signerPubKey)).toString()
     );
-    const nonce = sdkSymbol.generateMosaicId(address, Math.floor(Math.random() * 0xFFFFFFFF));
 
-    const flags = (supplyMutable ? 0x01 : 0) | (transferable ? 0x02 : 0)
-        | (restrictable ? 0x04 : 0) | (revokable ? 0x08 : 0);
+    // v3: MosaicNonce は crypto.getRandomValues で生成
+    const array = new Uint8Array(sdkSymbol.models.MosaicNonce.SIZE);
+    crypto.getRandomValues(array);
+    const nonce = sdkSymbol.models.MosaicNonce.deserialize(array);
 
+    // v3: generateMosaicId に nonce.value を渡す
+    const mosaicId = new sdkSymbol.models.MosaicId(
+        sdkSymbol.generateMosaicId(address, nonce.value)
+    );
+
+    // v3: MosaicFlags.NONE.value + 各フラグの.value を加算
+    let f = sdkSymbol.models.MosaicFlags.NONE.value;
+    if (supplyMutable)  f += sdkSymbol.models.MosaicFlags.SUPPLY_MUTABLE.value;
+    if (transferable)   f += sdkSymbol.models.MosaicFlags.TRANSFERABLE.value;
+    if (restrictable)   f += sdkSymbol.models.MosaicFlags.RESTRICTABLE.value;
+    if (revokable)      f += sdkSymbol.models.MosaicFlags.REVOKABLE.value;
+    const flags = new sdkSymbol.models.MosaicFlags(f);
+
+    // v3: 引数順 = (MosaicId, BlockDuration, nonce, flags, divisibility)
     const defDescriptor = new sdkSymbol.descriptors.MosaicDefinitionTransactionV1Descriptor(
-        nonce,
-        new sdkSymbol.models.MosaicFlags(flags),
-        divisibility,
-        new sdkSymbol.models.BlockDuration(durationBlocks)
+        mosaicId,                                           // モザイクID
+        new sdkSymbol.models.BlockDuration(BigInt(durationBlocks)), // 有効期限
+        nonce,                                              // ナンス
+        flags,                                              // モザイクフラグ
+        divisibility                                        // 可分性
     );
     const defTx = facade.createEmbeddedTransactionFromTypedDescriptor(defDescriptor, signerPubKey);
 
+    // v3: MosaicSupplyChangeAction.INCREASE はインスタンス（new不要）
     const supplyDescriptor = new sdkSymbol.descriptors.MosaicSupplyChangeTransactionV1Descriptor(
-        new sdkSymbol.models.UnresolvedMosaicId(nonce),
-        new sdkSymbol.models.MosaicSupplyChangeAction.INCREASE,
-        new sdkSymbol.models.Amount(supplyAmount)
+        new sdkSymbol.models.UnresolvedMosaicId(mosaicId.value),    // モザイクID
+        new sdkSymbol.models.Amount(BigInt(supplyAmount)),          // 数量
+        sdkSymbol.models.MosaicSupplyChangeAction.INCREASE          // アクション
     );
     const supplyTx = facade.createEmbeddedTransactionFromTypedDescriptor(supplyDescriptor, signerPubKey);
 
-    return { defTx, supplyTx, nonce };
+    return { defTx, supplyTx, mosaicId };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

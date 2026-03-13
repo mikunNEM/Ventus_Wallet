@@ -1,3 +1,12 @@
+
+// モザイク情報キャッシュ（可分性取得の高速化）
+const _mosaicInfoCache = new Map();
+async function getMosaicInfoCached(mosaicIdHex) {
+    if (_mosaicInfoCache.has(mosaicIdHex)) return _mosaicInfoCache.get(mosaicIdHex);
+    const info = await getMosaicInfo(mosaicIdHex);
+    _mosaicInfoCache.set(mosaicIdHex, info);
+    return info;
+}
 /**
  * main.js - Ventus ウォレット メインエントリポイント (Symbol SDK v3)
  *
@@ -821,6 +830,25 @@ async function main() {
     window.handleSSS_multisig = () => handleSSS_multisig(activeAddress);
     window.handleSSS_dona = () => handleSSS_dona(activeAddress);
 
+    // 追加グローバル関数（v3移植・復元分）
+    window.loadMsigPanelInfo  = () => loadMsigPanelInfo();
+    window.loadMsigTree       = () => loadMsigTree();
+    window.loadMsigSendModal  = () => loadMsigSendModal();
+    window.select_Page        = () => select_Page();
+    window.select_Page_mosa1  = () => select_Page_mosa1();
+    window.select_Page_namespace = () => select_Page_namespace();
+    window.select_Page_meta   = () => select_Page_meta();
+    window.holder_list        = () => holder_list();
+    window.ex_date1           = () => ex_date1();
+    window.ex_date2           = () => ex_date2();
+    window.feeCalc            = () => feeCalc();
+    window.MetaKey_select     = () => MetaKey_select();
+
+    // マルチシグ関連初期化
+    try { initMsigAddButton(); } catch(e) { console.warn('[main] initMsigAddButton error:', e); }
+    await updateMsigBadge(activeAddress);
+    await loadMsigPanelInfo();
+
     console.log('[main] 初期化完了');
 }
 
@@ -857,7 +885,23 @@ async function initAccountAndUI() {
     window.Msig_account = () => Msig_account(addr);
     window.handleSSS_multisig = () => handleSSS_multisig(addr);
     window.handleSSS_dona = () => handleSSS_dona(addr);
+    window.loadMsigPanelInfo = () => loadMsigPanelInfo();
+    window.loadMsigTree = () => loadMsigTree();
+    window.loadMsigSendModal = () => loadMsigSendModal();
+    window.select_Page = () => select_Page();
+    window.select_Page_mosa1 = () => select_Page_mosa1();
+    window.select_Page_namespace = () => select_Page_namespace();
+    window.select_Page_meta = () => select_Page_meta();
+    window.holder_list = () => holder_list();
+    window.ex_date1 = () => ex_date1();
+    window.ex_date2 = () => ex_date2();
+    window.feeCalc = () => feeCalc();
+    window.MetaKey_select = () => MetaKey_select();
 
+    console.log('[initAccountAndUI] step: window assignments done');
+    try { initMsigAddButton(); } catch(e) { console.warn('[initAccountAndUI] initMsigAddButton error:', e); }
+    console.log('[initAccountAndUI] step: before updateMsigBadge');
+    try { await updateMsigBadge(addr); } catch(e) { console.warn('[initAccountAndUI] updateMsigBadge error:', e); }
     console.log('[initAccountAndUI] アカウント初期化完了:', addr);
 }
 
@@ -1430,13 +1474,17 @@ async function Msig_account(activeAddress) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handleSSS_multisig(activeAddress) {
-    const multisigAddr = document.querySelector('.select_msig')?.value ?? '';
+    // モーダル内のセレクトから値を取得
+    const multisigAddr = document.querySelector('.select_msig_send')?.value ?? '';
     const toAddress = (document.getElementById('multisig_to')?.value ?? '').trim();
-    const mosaicIdHex = document.querySelector('.select_m2')?.value ?? '';
+    const mosaicIdHex = document.querySelector('.select_m_msig')?.value ?? '';
     const amountRaw = document.getElementById('multisig_amount')?.value ?? '0';
     const message = document.getElementById('multisig_message2')?.value ?? '';
     const signerPubKey = window.SSS.activePublicKey;
 
+    if (!multisigAddr) {
+        Swal.fire({ title: '送信元マルチシグアカウントを選択してください。', icon: 'warning' }); return;
+    }
     if (!toAddress) {
         Swal.fire({ title: '宛先アドレスを入力してください。', icon: 'warning' }); return;
     }
@@ -1448,12 +1496,20 @@ async function handleSSS_multisig(activeAddress) {
     }
 
     try {
-        const moInfo = await getMosaicInfo(mosaicIdHex);
+        const moInfo = await getMosaicInfoCached(mosaicIdHex);
         const amount = BigInt(Math.round(Number(amountRaw) * Math.pow(10, moInfo.divisibility)));
 
-        // マルチシグから送信: 転送Txを embedded に入れて AggregateBonded を組む
-        // minApproval が 1 の場合は AggregateComplete でも可（とりあえず Bonded で統一）
-        const innerTx = buildEmbeddedTransferTx(toAddress, mosaicIdHex, amount, message, signerPubKey);
+        // マルチシグから送信: inner tx の signerPublicKey はマルチシグアカウント自身の公開鍵が必要
+        let msigPubKey = signerPubKey;
+        try {
+            const acctRes = await fetch(new URL('/accounts/' + multisigAddr, NODE));
+            const acctJson = await acctRes.json();
+            const fetchedKey = acctJson.account?.publicKey ?? '';
+            if (fetchedKey && !/^0+$/.test(fetchedKey)) msigPubKey = fetchedKey;
+        } catch (e) {
+            console.warn('[handleSSS_multisig] msig pubkey fetch failed', e);
+        }
+        const innerTx = buildEmbeddedTransferTx(toAddress, mosaicIdHex, amount, message, msigPubKey);
         const aggregateBonded = buildAggregateBondedTx([innerTx], signerPubKey, 1, 100);
 
         const feeXym = Number(aggregateBonded.fee.value) / 1_000_000;
@@ -1530,3 +1586,1144 @@ window.addEventListener('SSSWindow', async () => {
 
 // 1000ms 後に main() を起動（v2 の script.js と同様）
 setTimeout(() => main(), 1000);
+
+
+// =============================================================================
+// マルチシグ送信モーダル: 送信元アカウント選択 & モザイク選択
+// =============================================================================
+
+export async function loadMsigSendModal() {
+    const cosignerAddr = window.SSS?.activeAddress;
+    if (!cosignerAddr) return;
+
+    const addrContainer = document.querySelector('.multisig_address_select');
+    const mosaicContainer = document.querySelector('.multisig_mosaic_select');
+    if (!addrContainer) return;
+
+    addrContainer.innerHTML = '<span style="color:#aaa;font-size:12px;">読み込み中...</span>';
+    if (mosaicContainer) mosaicContainer.innerHTML = '';
+
+    let multisigAddresses = [];
+    try {
+        const graph = await getMsigGraph(cosignerAddr);
+        console.log('[loadMsigSendModal] graph:', JSON.stringify(graph));
+        const seen = new Set();
+        seen.add(cosignerAddr);
+        for (const entry of (graph ?? [])) {
+            for (const msigEntry of (entry.multisigEntries ?? [])) {
+                const msig = msigEntry.multisig ?? msigEntry;
+                // accountAddress フィールドがある場合
+                const rawAcct = msig.accountAddress ?? msig.account;
+                if (rawAcct && typeof rawAcct === 'string') {
+                    const addr = rawAcct.length === 48 ? hexToAddress(rawAcct) : rawAcct;
+                    if (!seen.has(addr)) { seen.add(addr); multisigAddresses.push(addr); }
+                }
+                // multisigAddresses (さらに上の先祖) も収集
+                for (const raw of (msig.multisigAddresses ?? [])) {
+                    const addr = (typeof raw === 'string' && raw.length === 48) ? hexToAddress(raw) : raw;
+                    if (!seen.has(addr)) { seen.add(addr); multisigAddresses.push(addr); }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[loadMsigSendModal] graph fetch failed, fallback to /multisig', e);
+    }
+
+    if (multisigAddresses.length === 0) {
+        try {
+            const res = await fetch(new URL('/account/' + cosignerAddr + '/multisig', NODE));
+            const json = await res.json();
+            multisigAddresses = (json.multisig?.multisigAddresses ?? []).map(
+                a => (typeof a === 'string' && a.length === 48) ? hexToAddress(a) : a
+            );
+        } catch (e) {
+            console.warn('[loadMsigSendModal] multisig fallback failed', e);
+        }
+    }
+
+    if (multisigAddresses.length === 0) {
+        addrContainer.innerHTML =
+            '<span style="color:#e53e3e;font-size:12px;">⚠️ 操作可能なマルチシグアカウントが見つかりません</span>';
+        return;
+    }
+
+    const sel = document.createElement('select');
+    sel.className = 'select_msig_send msig-send-input';
+    sel.style.cssText = 'width:100%;padding:8px 12px;border-radius:8px;border:1.5px solid #c4b5fd;font-size:13px;background:#fff;';
+    multisigAddresses.forEach(addr => {
+        const opt = document.createElement('option');
+        opt.value = addr;
+        opt.title = addr;
+        opt.textContent = addr.slice(0, 14) + '...' + addr.slice(-8);
+        sel.appendChild(opt);
+    });
+    addrContainer.innerHTML = '';
+    addrContainer.appendChild(sel);
+
+    const addrHint = document.createElement('div');
+    addrHint.style.cssText = 'font-size:10px;color:#888;margin-top:3px;word-break:break-all;';
+    addrHint.textContent = sel.value;
+    addrContainer.appendChild(addrHint);
+    sel.addEventListener('change', () => { addrHint.textContent = sel.value; });
+
+    await _loadMsigSendMosaics(sel.value, mosaicContainer);
+    sel.addEventListener('change', async () => {
+        await _loadMsigSendMosaics(sel.value, mosaicContainer);
+    });
+}
+
+async function _loadMsigSendMosaics(targetAddr, mosaicContainer) {
+    if (!mosaicContainer) return;
+    mosaicContainer.innerHTML = '<span style="color:#aaa;font-size:12px;">読み込み中...</span>';
+
+    const hoyu = document.getElementById('multisig_hoyu-ryo');
+    const kigen = document.getElementById('multisig_kigen-gire');
+    if (hoyu) hoyu.textContent = '';
+    if (kigen) kigen.textContent = '';
+
+    try {
+        const res = await fetch(new URL('/accounts/' + targetAddr, NODE));
+        const json = await res.json();
+        const mosaics = json.account?.mosaics ?? [];
+
+        if (mosaics.length === 0) {
+            mosaicContainer.innerHTML = '<span style="color:#aaa;font-size:12px;">保有モザイクなし</span>';
+            return;
+        }
+
+        const mosaicIds = mosaics.map(m => m.id);
+        let nameMap = {};
+        try {
+            const namesRes = await getMosaicsNames(mosaicIds);
+            for (const entry of (namesRes ?? [])) {
+                const n = entry.names?.[0];
+                nameMap[entry.mosaicId.toUpperCase()] = (n && typeof n === 'object') ? n.name : (n ?? null);
+            }
+        } catch { }
+
+        const options = [];
+        for (const m of mosaics) {
+            let div = 0;
+            try { const moInfo = await getMosaicInfo(m.id); div = moInfo.divisibility; } catch { }
+            const name = nameMap[m.id.toUpperCase()] ?? m.id;
+            options.push({ id: m.id, name, amount: Number(m.amount), div });
+        }
+        options.sort((a, b) => {
+            if (a.name.includes('symbol.xym')) return -1;
+            if (b.name.includes('symbol.xym')) return 1;
+            return a.name < b.name ? -1 : 1;
+        });
+
+        const sel = document.createElement('select');
+        sel.className = 'select_m_msig msig-send-input';
+        sel.style.cssText = 'width:100%;padding:8px 12px;border-radius:8px;border:1.5px solid #c4b5fd;font-size:13px;background:#fff;';
+        for (const o of options) {
+            const opt = document.createElement('option');
+            opt.value = o.id;
+            opt.dataset.div = o.div;
+            opt.dataset.amount = o.amount;
+            opt.textContent = (o.name !== o.id) ? o.name : (o.id.slice(0, 16) + '...');
+            sel.appendChild(opt);
+        }
+        mosaicContainer.innerHTML = '';
+        mosaicContainer.appendChild(sel);
+
+        const updateBalance = (selectedOpt) => {
+            const div = Number(selectedOpt.dataset.div ?? 0);
+            const amt = Number(selectedOpt.dataset.amount ?? 0);
+            const disp = (amt / Math.pow(10, div)).toLocaleString(undefined, { maximumFractionDigits: div });
+            const amtInput = document.getElementById('multisig_amount');
+            if (amtInput) amtInput.placeholder = div > 0 ? '0.' + '0'.repeat(div) : '0';
+            if (hoyu) hoyu.textContent = '保有量: ' + disp + '　';
+        };
+        if (sel.options.length > 0) updateBalance(sel.options[0]);
+        sel.addEventListener('change', () => { updateBalance(sel.options[sel.selectedIndex]); });
+
+    } catch (e) {
+        console.error('[_loadMsigSendMosaics]', e);
+        mosaicContainer.innerHTML = '<span style="color:#e53e3e;font-size:12px;">モザイク取得失敗</span>';
+    }
+}
+
+// =============================================================================
+// アカウント種別バッジ表示
+// =============================================================================
+
+async function updateMsigBadge(addr) {
+    const badgeEl = document.getElementById('multisig_account');
+    console.log('[updateMsigBadge] START el:', badgeEl, 'addr:', addr);
+    if (!badgeEl) { console.error('[updateMsigBadge] #multisig_account not found!'); return; }
+
+    // すぐに「確認中」を表示してデバッグ
+    badgeEl.style.minHeight = '24px';
+    badgeEl.innerHTML = '<span style="font-size:11px;color:#888;">⏳ アカウント種別確認中...</span>';
+
+    const BASE = 'display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:bold;margin:4px 0;';
+    const STYLES = {
+        msig:    BASE + 'background:linear-gradient(90deg,#818cf8,#c084fc);color:#fff;',
+        cosig:   BASE + 'background:linear-gradient(90deg,#22d3ee,#818cf8);color:#fff;',
+        both:    BASE + 'background:linear-gradient(90deg,#06b6d4,#a855f7);color:#fff;',
+        normal:  BASE + 'background:#e5e7eb;color:#6b7280;',
+    };
+
+    let data = null;
+    try {
+        data = await getMultisigAccountInfo(addr);
+        console.log('[updateMsigBadge] data:', JSON.stringify(data));
+    } catch (e) {
+        console.warn('[updateMsigBadge] fetch failed (probably 404 = 非マルチシグ):', e.message);
+    }
+
+    const msig    = data?.multisig;
+    const isMsig  = (msig?.cosignatoryAddresses?.length ?? 0) > 0;
+    const isCosig = (msig?.multisigAddresses?.length    ?? 0) > 0;
+
+    console.log('[updateMsigBadge] isMsig:', isMsig, 'isCosig:', isCosig);
+
+    if (isMsig && isCosig) {
+        badgeEl.innerHTML = `<span style="${STYLES.both}">🏦 マルチシグ ／ 🔐 連署者</span>`;
+    } else if (isMsig) {
+        const minAp  = msig.minApproval ?? 0;
+        const numCos = msig.cosignatoryAddresses?.length ?? 0;
+        badgeEl.innerHTML = `<span style="${STYLES.msig}">🏦 マルチシグ（${minAp} of ${numCos}）</span>`;
+    } else if (isCosig) {
+        const numMsig = msig.multisigAddresses?.length ?? 0;
+        badgeEl.innerHTML = `<span style="${STYLES.cosig}">🔐 連署者（${numMsig}件管理）</span>`;
+    } else {
+        badgeEl.innerHTML = `<span style="${STYLES.normal}">👤 通常アカウント</span>`;
+    }
+}
+
+
+// =============================================================================
+// マルチシグ設定パネル: アカウント選択 & コサイナー管理
+// =============================================================================
+
+// 連署者アドレスリスト（モジュールスコープで管理）
+const cosigList = [];
+const deleteList = [];
+let msigIsEditMode = false;
+let _currentMinApproval = 0;
+let _currentMinRemoval = 0;
+let _msigTargetAddress = '';
+
+export async function loadMsigPanelInfo() {
+    const cosignerAddr = window.SSS?.activeAddress;
+    if (!cosignerAddr) return;
+
+    cosigList.length = 0;
+    deleteList.length = 0;
+    _msigTargetAddress = '';
+
+    const node = window.ventus_NODE;
+    if (!node) return;
+
+    let multisigAddresses = [];
+    try {
+        const res = await fetch(new URL('/account/' + cosignerAddr + '/multisig', node));
+        const json = await res.json();
+        multisigAddresses = (json.multisig?.multisigAddresses ?? []).map(
+            a => a.length === 48 ? hexToAddress(a) : a
+        );
+    } catch (e) {
+        console.warn('[loadMsigPanelInfo] fetch failed', e);
+    }
+
+    const addrSel = document.querySelector('.multisig_address_select_2');
+    if (addrSel) {
+        if (multisigAddresses.length === 0) {
+            addrSel.innerHTML = `<span class="msig-addr-text">${cosignerAddr}</span>`;
+            _msigTargetAddress = cosignerAddr;
+        } else {
+            const allCandidates = [cosignerAddr, ...multisigAddresses];
+            const sel = document.createElement('select');
+            sel.id = 'msig-target-select';
+            sel.className = 'msig-target-select';
+            allCandidates.forEach((a, i) => {
+                const opt = document.createElement('option');
+                opt.value = a;
+                opt.textContent = i === 0 ? `自分のアカウント（${a.slice(0, 8)}...）`
+                    : `マルチシグ: ${a.slice(0, 8)}...`;
+                sel.appendChild(opt);
+            });
+            addrSel.innerHTML = '';
+            addrSel.appendChild(sel);
+            _msigTargetAddress = allCandidates[0];
+            sel.addEventListener('change', async () => {
+                _msigTargetAddress = sel.value;
+                await _loadMsigTargetInfo(_msigTargetAddress, node);
+            });
+        }
+    }
+
+    await _loadMsigTargetInfo(_msigTargetAddress, node);
+}
+
+async function _loadMsigTargetInfo(targetAddr, node) {
+    cosigList.length = 0;
+    deleteList.length = 0;
+
+    const defaultDiv = document.getElementById('default_account');
+    const rensyoDiv = document.getElementById('rensyosya');
+    const deleteDiv = document.getElementById('delete-container');
+    const displayCont = document.getElementById('display-container');
+    const addSection = document.getElementById('msig-add-section');
+    const deltaSection = document.getElementById('msig-delta-section');
+    const newSection = document.getElementById('msig-new-section');
+
+    if (defaultDiv) defaultDiv.innerHTML = '';
+    if (rensyoDiv) rensyoDiv.innerHTML = '';
+    if (deleteDiv) deleteDiv.innerHTML = '';
+    if (displayCont) displayCont.innerHTML = '';
+
+    try {
+        const res = await fetch(new URL('/account/' + targetAddr + '/multisig', node));
+        const json = await res.json();
+        const info = json.multisig;
+
+        if (info && (info.minApproval > 0 || info.minRemoval > 0)) {
+            msigIsEditMode = true;
+            _currentMinApproval = info.minApproval ?? 0;
+            _currentMinRemoval = info.minRemoval ?? 0;
+
+            if (defaultDiv) {
+                defaultDiv.innerHTML =
+                    `<div class="msig-status-badge">マルチシグ設定済み</div>` +
+                    `<div class="msig-status-vals">最小承認: <b>${_currentMinApproval}</b> / 最小削除: <b>${_currentMinRemoval}</b></div>`;
+            }
+
+            if (rensyoDiv) {
+                rensyoDiv.innerHTML = '<div class="msig-section-label">現在の連署者</div>';
+                for (const rawAddr of (info.cosignatoryAddresses ?? [])) {
+                    const displayAddr = rawAddr.length === 48 ? hexToAddress(rawAddr) : rawAddr;
+                    const item = document.createElement('div');
+                    item.className = 'msig-cosig-card';
+                    item.dataset.addr = displayAddr;
+                    item.innerHTML =
+                        `<span class="msig-cosig-addr">${displayAddr}</span>` +
+                        `<button class="msig-del-btn">削除予定</button>`;
+                    item.querySelector('.msig-del-btn').addEventListener('click', () => {
+                        if (deleteList.includes(displayAddr)) return;
+                        deleteList.push(displayAddr);
+                        item.classList.add('msig-cosig-queued');
+                        item.querySelector('.msig-del-btn').disabled = true;
+                        _renderDeleteQueue();
+                    });
+                    rensyoDiv.appendChild(item);
+                }
+            }
+
+            if (deleteDiv) {
+                deleteDiv.innerHTML = '<div class="msig-section-label" id="delete-label" style="display:none">削除予定</div>';
+            }
+
+            const buildAbsSelect = (id, currentVal) => {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                sel.innerHTML = '';
+                for (let i = 0; i <= 25; i++) {
+                    const opt = document.createElement('option');
+                    opt.value = String(i);
+                    opt.textContent = String(i);
+                    if (i === currentVal) opt.selected = true;
+                    sel.appendChild(opt);
+                }
+            };
+            buildAbsSelect('delta_sig', _currentMinApproval);
+            buildAbsSelect('delta_del_sig', _currentMinRemoval);
+
+            if (addSection) addSection.style.display = 'block';
+            if (deltaSection) deltaSection.style.display = 'block';
+            if (newSection) newSection.style.display = 'none';
+        } else {
+            msigIsEditMode = false;
+            if (defaultDiv) defaultDiv.innerHTML = '<div class="msig-status-badge new">通常アカウント（マルチシグ未設定）</div>';
+            if (addSection) addSection.style.display = 'block';
+            if (deltaSection) deltaSection.style.display = 'none';
+            if (newSection) newSection.style.display = 'block';
+        }
+    } catch (e) {
+        console.warn('[_loadMsigTargetInfo]', e);
+        msigIsEditMode = false;
+        if (addSection) addSection.style.display = 'block';
+        if (newSection) newSection.style.display = 'block';
+        if (deltaSection) deltaSection.style.display = 'none';
+    }
+}
+
+function _renderDeleteQueue() {
+    const deleteDiv = document.getElementById('delete-container');
+    const label = document.getElementById('delete-label');
+    if (!deleteDiv) return;
+    [...deleteDiv.querySelectorAll('.msig-delete-item')].forEach(el => el.remove());
+    if (label) label.style.display = deleteList.length > 0 ? 'block' : 'none';
+    deleteList.forEach(addr => {
+        const item = document.createElement('div');
+        item.className = 'msig-delete-item';
+        item.innerHTML =
+            `<span class="msig-cosig-addr del">${addr}</span>` +
+            `<button class="msig-undo-btn">取り消し</button>`;
+        item.querySelector('.msig-undo-btn').addEventListener('click', () => {
+            const idx = deleteList.indexOf(addr);
+            if (idx !== -1) deleteList.splice(idx, 1);
+            item.remove();
+            if (label) label.style.display = deleteList.length > 0 ? 'block' : 'none';
+            const rensyoDiv = document.getElementById('rensyosya');
+            if (rensyoDiv) {
+                rensyoDiv.querySelectorAll('.msig-cosig-card').forEach(card => {
+                    if (card.dataset.addr === addr) {
+                        card.classList.remove('msig-cosig-queued');
+                        card.querySelector('.msig-del-btn').disabled = false;
+                    }
+                });
+            }
+        });
+        deleteDiv.appendChild(item);
+    });
+}
+
+// =============================================================================
+// パーシャルトランザクション
+// =============================================================================
+
+export async function initPartialTxes(addr) {
+    const container = document.getElementById('partial-tx-list');
+    if (!container) return;
+    container.innerHTML = '';
+    try {
+        const data = await searchPartialTransactions({ address: addr, pageSize: 25 });
+        const txes = data?.data ?? [];
+        if (txes.length === 0) {
+            container.innerHTML = '<div style="color:#aaa;font-size:12px;padding:8px;">署名待ちトランザクションなし</div>';
+            return;
+        }
+        for (const tx of txes) {
+            const hash = tx.meta?.hash ?? '?';
+            const item = document.createElement('div');
+            item.className = 'partial-tx-item';
+            item.innerHTML =
+                `<div class="partial-tx-hash">${hash.slice(0, 16)}...</div>` +
+                `<button class="partial-tx-sign-btn" onclick="window._signPartialTx('${hash}')">署名</button>`;
+            container.appendChild(item);
+        }
+    } catch (e) {
+        console.warn('[initPartialTxes]', e);
+    }
+}
+
+// =============================================================================
+// ページ選択・テーブル再描画 (v3/fetch版)
+// =============================================================================
+
+// トランザクション履歴ページ切り替え
+function select_Page() {
+    const pageNum = Number(document.getElementById('page_num1')?.value ?? 1);
+    const addr = window.SSS?.activeAddress;
+    if (addr) showTransactions(addr, pageNum);
+}
+
+// モザイク一覧ページ切り替え
+function select_Page_mosa1() {
+    const addr = window.SSS?.activeAddress;
+    if (addr) Onclick_mosaic(addr);
+}
+
+// ネームスペース一覧ページ切り替え (v3版)
+async function select_Page_namespace() {
+    const pageNum = Number(document.getElementById('page_num_namespace')?.value ?? 1);
+    const addr = window.SSS?.activeAddress;
+    if (!addr) return;
+
+    const nsTbl = document.getElementById('ns_table');
+    if (nsTbl) nsTbl.innerHTML = '';
+    const nsSel = document.querySelector('.Namespace_select');
+    if (nsSel) nsSel.innerHTML = '';
+
+    try {
+        const chainInfo = await getChainInfo();
+        const currentHeight = Number(chainInfo.height);
+        const currentBlock = await getBlockByHeight(currentHeight);
+        const currentTs = Number(currentBlock.timestamp);
+
+        const data = await fetchJson(new URL(
+            `/namespaces?ownerAddress=${addr}&pageNumber=${pageNum}&pageSize=50&order=desc`, NODE
+        ));
+        const namespaces = data.data ?? [];
+
+        if (!nsTbl) return;
+        const tbl = document.createElement('table');
+        tbl.setAttribute('border', '1');
+        const tblBody = document.createElement('tbody');
+
+        // ヘッダー行
+        const hdr = document.createElement('tr');
+        ['No', 'ネームスペース', '有効期限', '種別'].forEach(h => {
+            const th = document.createElement('td');
+            th.textContent = h;
+            th.style.textAlign = 'center';
+            hdr.appendChild(th);
+        });
+        tblBody.appendChild(hdr);
+
+        const nsIds = namespaces.map(ns => ns.namespace?.level0 ?? ns.id ?? '');
+        let nsNameMap = {};
+        if (nsIds.length > 0) {
+            try {
+                const names = await fetchJson(new URL('/namespaces/names', NODE), 'POST', { namespaceIds: nsIds.filter(Boolean) });
+                for (const n of (names.namespaceNames ?? [])) {
+                    nsNameMap[n.id?.toUpperCase()] = n.name;
+                }
+            } catch {}
+        }
+
+        namespaces.forEach((nsEntry, idx) => {
+            const ns = nsEntry.namespace ?? nsEntry;
+            const endH = Number(ns.endHeight ?? 0);
+            const remainBlocks = endH - currentHeight;
+            let expiryStr = '';
+            if (endH === 0xFFFFFFFFFFFFFFFF || endH > 9_999_999) {
+                expiryStr = '無期限 ∞';
+            } else {
+                const expiryTs = (currentTs + remainBlocks * 30000);
+                const d = new Date((epochAdjustment + expiryTs / 1000) * 1000);
+                expiryStr = d.toLocaleString('ja-JP');
+            }
+            const nsId = (ns.level0 ?? ns.id ?? '');
+            const nsName = nsNameMap[nsId.toUpperCase?.()] ?? nsId;
+            const isRoot = (ns.depth ?? 1) === 1;
+            const row = document.createElement('tr');
+            [
+                String(idx + 1 + (pageNum - 1) * 50),
+                nsName,
+                expiryStr,
+                isRoot ? 'ルート' : 'サブ'
+            ].forEach((text, ci) => {
+                const td = document.createElement('td');
+                td.textContent = text;
+                td.style.textAlign = ci === 0 ? 'right' : ci === 3 ? 'center' : 'left';
+                row.appendChild(td);
+            });
+            tblBody.appendChild(row);
+
+            // セレクトボックスにも追加
+            if (nsSel && isRoot) {
+                const opt = document.createElement('option');
+                opt.value = nsName;
+                opt.textContent = nsName;
+                nsSel.appendChild(opt);
+            }
+        });
+
+        tbl.appendChild(tblBody);
+        nsTbl.appendChild(tbl);
+    } catch (e) {
+        console.error('[select_Page_namespace]', e);
+    }
+}
+
+// Metadata一覧ページ切り替え (v3版)
+async function select_Page_meta() {
+    const pageNum = Number(document.getElementById('page_num_meta')?.value ?? 1);
+    const addr = window.SSS?.activeAddress;
+    if (!addr) return;
+
+    const metaTbl = document.getElementById('meta_table');
+    if (metaTbl) metaTbl.innerHTML = '';
+
+    try {
+        const data = await fetchJson(new URL(
+            `/metadata?targetAddress=${addr}&pageNumber=${pageNum}&pageSize=50`, NODE
+        ));
+        const metas = data.data ?? [];
+        if (!metaTbl) return;
+
+        const tbl = document.createElement('table');
+        tbl.setAttribute('border', '1');
+        const tblBody = document.createElement('tbody');
+
+        const hdr = document.createElement('tr');
+        ['No', 'キー', '値', '送信者'].forEach(h => {
+            const th = document.createElement('td');
+            th.textContent = h;
+            th.style.textAlign = 'center';
+            hdr.appendChild(th);
+        });
+        tblBody.appendChild(hdr);
+
+        metas.forEach((m, idx) => {
+            const meta = m.metadataEntry ?? m;
+            const row = document.createElement('tr');
+            const valueHex = meta.value ?? '';
+            let valueStr = '';
+            try {
+                valueStr = decodeURIComponent(escape(String.fromCharCode(
+                    ...valueHex.match(/.{1,2}/g).map(b => parseInt(b, 16))
+                )));
+            } catch { valueStr = valueHex; }
+            const senderAddr = meta.sourceAddress?.length === 48
+                ? hexToAddress(meta.sourceAddress) : (meta.sourceAddress ?? '');
+            [String(idx + 1), meta.scopedMetadataKey ?? '', valueStr, senderAddr].forEach((text, ci) => {
+                const td = document.createElement('td');
+                td.textContent = text;
+                td.style.textAlign = ci === 0 ? 'right' : 'left';
+                row.appendChild(td);
+            });
+            tblBody.appendChild(row);
+        });
+
+        tbl.appendChild(tblBody);
+        metaTbl.appendChild(tbl);
+    } catch (e) {
+        console.error('[select_Page_meta]', e);
+    }
+}
+
+// =============================================================================
+// モザイク保有者一覧 (v3版)
+// =============================================================================
+
+async function holder_list() {
+    const pageNum = Number(document.getElementById('page_num_holder1')?.value ?? 1);
+    const mosaicId = document.querySelector('.select_r')?.value ?? '';
+    if (!mosaicId) return;
+
+    const holderTbl = document.getElementById('holder_table');
+    if (holderTbl) holderTbl.innerHTML = '';
+
+    try {
+        const moInfo = await getMosaicInfo(mosaicId);
+        const div = moInfo.divisibility;
+
+        const data = await fetchJson(new URL(
+            `/accounts?mosaicId=${mosaicId}&orderBy=balance&order=desc&pageSize=100&pageNumber=${pageNum}`, NODE
+        ));
+        const accounts = data.data ?? [];
+
+        // モザイク名
+        const domMosaicRev = document.getElementById('mosaic_ID_rev');
+        const domNsRev = document.getElementById('namespace_rev');
+        if (domMosaicRev) domMosaicRev.innerHTML = `<big>< ${mosaicId} ></big>`;
+        if (domNsRev) {
+            try {
+                const nameRes = await getMosaicsNames([mosaicId]);
+                const nameEntry = nameRes?.[0];
+                const names = nameEntry?.names ?? [];
+                const n = names[0];
+                const nameStr = n && typeof n === 'object' ? n.name : (n ?? '');
+                domNsRev.innerHTML = nameStr ? `<big>${nameStr}</big>` : '';
+            } catch { domNsRev.innerHTML = ''; }
+        }
+
+        if (!holderTbl) return;
+        const tbl = document.createElement('table');
+        tbl.setAttribute('border', '1');
+        const tblBody = document.createElement('tbody');
+
+        const hdr = document.createElement('tr');
+        ['No', 'アドレス', '保有量'].forEach(h => {
+            const th = document.createElement('td');
+            th.textContent = h;
+            th.style.textAlign = 'center';
+            hdr.appendChild(th);
+        });
+        tblBody.appendChild(hdr);
+
+        accounts.forEach((entry, idx) => {
+            const account = entry.account ?? entry;
+            const address = account.address?.length === 48 ? hexToAddress(account.address) : (account.address ?? '');
+            const rawAmount = account.mosaics?.find(m => m.id === mosaicId)?.amount ?? 0;
+            const amount = (Number(rawAmount) / Math.pow(10, div)).toLocaleString(undefined, {
+                minimumFractionDigits: div, maximumFractionDigits: div
+            });
+            const row = document.createElement('tr');
+            const no = document.createElement('td');
+            no.textContent = String(idx + 1 + 100 * (pageNum - 1));
+            no.style.textAlign = 'right';
+            const addrCell = document.createElement('td');
+            const link = document.createElement('a');
+            link.href = `${EXPLORER}/accounts/${address}`;
+            link.target = '_blank';
+            link.textContent = address;
+            addrCell.appendChild(link);
+            const amtCell = document.createElement('td');
+            amtCell.textContent = amount;
+            amtCell.style.textAlign = 'right';
+            row.append(no, addrCell, amtCell);
+            tblBody.appendChild(row);
+        });
+
+        tbl.appendChild(tblBody);
+        holderTbl.appendChild(tbl);
+    } catch (e) {
+        console.error('[holder_list]', e);
+    }
+}
+
+// =============================================================================
+// 有効期限計算 / NS手数料計算 (v3版)
+// =============================================================================
+
+async function ex_date1() {
+    const blocks = Number(document.getElementById('Duration1')?.value ?? 0);
+    const el = document.getElementById('ex_date1');
+    if (!el) return;
+    try {
+        if (blocks === 0) { el.innerHTML = `<p style="font-size:20px;color:blue">無期限 ∞</p>`; return; }
+        const chain = await getChainInfo();
+        const currentBlock = await getBlockByHeight(Number(chain.height));
+        const ts = Number(currentBlock.timestamp) + blocks * 30000;
+        const date = new Date((epochAdjustment + ts / 1000) * 1000);
+        el.innerHTML = `<p style="font-size:20px;color:blue">有効期限　${date.toLocaleString('ja-JP')}</p>`;
+    } catch (e) {
+        console.warn('[ex_date1]', e);
+    }
+}
+
+async function ex_date2() {
+    const blocks = Number(document.getElementById('Duration2')?.value ?? 0);
+    const el = document.getElementById('ex_date2');
+    if (!el) return;
+    try {
+        const chain = await getChainInfo();
+        const currentBlock = await getBlockByHeight(Number(chain.height));
+        const ts = Number(currentBlock.timestamp) + blocks * 30000;
+        const date = new Date((epochAdjustment + ts / 1000) * 1000);
+        el.innerHTML = `<p style="font-size:20px;color:blue">有効期限　${date.toLocaleString('ja-JP')}</p>`;
+    } catch (e) {
+        console.warn('[ex_date2]', e);
+    }
+}
+
+async function feeCalc() {
+    const blocks = Number(document.getElementById('Duration2')?.value ?? 0);
+    const feeEl = document.getElementById('ns_fee');
+    if (!feeEl) return;
+    try {
+        const feeRes = await fetchJson(new URL('/network/fees/rental', NODE));
+        const perBlock = Number(feeRes.effectiveRootNamespaceRentalFeePerBlock ?? 0);
+        const total = (blocks * perBlock / 1_000_000).toFixed(6);
+        feeEl.innerHTML = `<p style="font-size:20px;color:blue">レンタル手数料　 ${Number(total).toLocaleString()} XYM</p>`;
+    } catch (e) {
+        console.warn('[feeCalc]', e);
+    }
+}
+
+// =============================================================================
+// Metadata種別UI切り替え
+// =============================================================================
+
+function MetaKey_select() {
+    const metaType = document.getElementById('Meta_type')?.value ?? '';
+    const domAddress = document.getElementById('meta_address');
+    const domMosaic = document.getElementById('meta_mosaic');
+    const domNamespace = document.getElementById('meta_namespace');
+
+    if (metaType === '0') {
+        if (domMosaic) domMosaic.style.display = 'none';
+        if (domNamespace) domNamespace.style.display = 'none';
+        if (domAddress) domAddress.innerHTML = `
+            <div class="Form-Item_Meta">
+            <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Meta">Address</span></p>
+            <input type="text" class="Form-Item-Input_Meta" id="Meta_address_input"
+                   placeholder="${window.SSS?.activeAddress ?? ''}" />
+            </div>`;
+    } else if (metaType === '1') {
+        if (domAddress) domAddress.innerHTML = '';
+        if (domMosaic) domMosaic.style.display = 'flex';
+        if (domNamespace) domNamespace.style.display = 'none';
+    } else if (metaType === '2') {
+        if (domAddress) domAddress.innerHTML = '';
+        if (domMosaic) domMosaic.style.display = 'none';
+        if (domNamespace) domNamespace.style.display = 'flex';
+    } else {
+        if (domAddress) domAddress.innerHTML = '';
+        if (domMosaic) domMosaic.style.display = 'none';
+        if (domNamespace) domNamespace.style.display = 'none';
+    }
+}
+
+// =============================================================================
+// マルチシグ ツリー (Canvas 2D 描画版)
+// =============================================================================
+
+// ツリー探索用キャッシュ
+const _msigVisited = new Set();
+const _msigNodeMap = new Map();
+
+async function _msigFetchInfo(address) {
+    try {
+        const data = await getMultisigAccountInfo(address);
+        return data?.multisig ?? null;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function _msigBuildTreeNode(address) {
+    if (_msigVisited.has(address)) return _msigNodeMap.get(address);
+    _msigVisited.add(address);
+    const info = await _msigFetchInfo(address);
+    const dispShort = address.slice(0, 6) + '...' + address.slice(-6);
+    const isActive = (address === (window.SSS?.activeAddress ?? ''));
+    const node = {
+        addr: address,
+        label: dispShort,
+        approval: info?.minApproval ?? 0,
+        removal: info?.minRemoval ?? 0,
+        children: [],
+        isActive,
+        isMsig: (info?.cosignatoryAddresses?.length ?? 0) > 0,
+    };
+    _msigNodeMap.set(address, node);
+    return node;
+}
+
+async function _msigFindRoots(address) {
+    const info = await _msigFetchInfo(address);
+    if (!info || (info.multisigAddresses ?? []).length === 0) return [address];
+    const roots = [];
+    for (const raw of info.multisigAddresses) {
+        const addr = raw.length === 48 ? hexToAddress(raw) : raw;
+        roots.push(...(await _msigFindRoots(addr)));
+    }
+    return roots;
+}
+
+async function _msigProcessCosignatories(address) {
+    const node = await _msigBuildTreeNode(address);
+    if (!node) return null;
+    const info = await _msigFetchInfo(address);
+    if (!info) return node;
+    for (const raw of (info.cosignatoryAddresses ?? [])) {
+        const childAddr = raw.length === 48 ? hexToAddress(raw) : raw;
+        const child = await _msigProcessCosignatories(childAddr);
+        if (child && !node.children.some(c => c.addr === child.addr)) {
+            node.children.push(child);
+        }
+    }
+    return node;
+}
+
+// getMsigGraph を使ってグラフ構造をフラットに取得
+async function _msigBuildGraphData() {
+    const addr = window.SSS?.activeAddress;
+    if (!addr) {
+        console.warn('[msigTree] SSS.activeAddress not set');
+        return null;
+    }
+    console.log('[msigTree] fetching graph for:', addr);
+
+    // まず自分自身の情報
+    const selfInfo = await getMultisigAccountInfo(addr).catch(() => null);
+    const selfMsig = selfInfo?.multisig;
+    console.log('[msigTree] selfMsig:', selfMsig);
+
+    // グラフを取得
+    const graph = await getMsigGraph(addr).catch(e => { console.warn(e); return []; });
+    console.log('[msigTree] graph:', graph);
+
+    return { addr, selfMsig, graph };
+}
+
+
+// Canvas にツリーを描画
+function _msigRenderCanvas(canvas, trees) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    if (!trees || trees.length === 0) {
+        ctx.fillStyle = '#aaa';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('マルチシグ情報なし', W / 2, H / 2);
+        return;
+    }
+
+    const NODE_W = 150, NODE_H = 50, H_GAP = 60, V_GAP = 80;
+
+    // BFS でレイアウト計算
+    function calcLayout(root, startX, startY) {
+        const levels = [];
+        const queue = [{ node: root, depth: 0 }];
+        while (queue.length > 0) {
+            const { node, depth } = queue.shift();
+            if (!levels[depth]) levels[depth] = [];
+            levels[depth].push(node);
+            node._depth = depth;
+            for (const child of (node.children ?? [])) {
+                queue.push({ node: child, depth: depth + 1 });
+            }
+        }
+        // 各ノードの x,y を設定
+        for (let d = 0; d < levels.length; d++) {
+            const levelNodes = levels[d];
+            const totalW = levelNodes.length * NODE_W + (levelNodes.length - 1) * H_GAP;
+            let x = startX + (W - totalW) / 2;
+            for (const n of levelNodes) {
+                n._x = x + NODE_W / 2;
+                n._y = startY + d * (NODE_H + V_GAP) + NODE_H / 2;
+                x += NODE_W + H_GAP;
+            }
+        }
+        return levels.length;
+    }
+
+    let offsetY = 20;
+    for (const root of trees) {
+        const depth = calcLayout(root, 0, offsetY);
+        offsetY += depth * (NODE_H + V_GAP) + 40;
+    }
+
+    // 接続線を描画
+    function drawLines(node) {
+        for (const child of (node.children ?? [])) {
+            ctx.beginPath();
+            ctx.strokeStyle = '#c4b5fd';
+            ctx.lineWidth = 1.5;
+            ctx.moveTo(node._x, node._y + NODE_H / 2);
+            const midY = (node._y + child._y) / 2;
+            ctx.lineTo(node._x, midY);
+            ctx.lineTo(child._x, midY);
+            ctx.lineTo(child._x, child._y - NODE_H / 2);
+            ctx.stroke();
+            drawLines(child);
+        }
+    }
+
+    // ノードを描画
+    function drawNode(node) {
+        const x = node._x - NODE_W / 2;
+        const y = node._y - NODE_H / 2;
+        const r = 10;
+
+        // 枠
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + NODE_W - r, y);
+        ctx.quadraticCurveTo(x + NODE_W, y, x + NODE_W, y + r);
+        ctx.lineTo(x + NODE_W, y + NODE_H - r);
+        ctx.quadraticCurveTo(x + NODE_W, y + NODE_H, x + NODE_W - r, y + NODE_H);
+        ctx.lineTo(x + r, y + NODE_H);
+        ctx.quadraticCurveTo(x, y + NODE_H, x, y + NODE_H - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+
+        if (node.isActive) {
+            ctx.fillStyle = '#fef9c3';
+        } else if (node.isMsig) {
+            ctx.fillStyle = '#fce7f3';
+        } else {
+            ctx.fillStyle = '#ede9fe';
+        }
+        ctx.fill();
+        ctx.strokeStyle = node.isMsig ? '#f9a8d4' : '#c4b5fd';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // ラベル
+        ctx.fillStyle = '#374151';
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(node.label, node._x, node._y - 4);
+
+        // 承認/削除
+        if (node.approval > 0) {
+            ctx.fillStyle = '#6d28d9';
+            ctx.font = '10px sans-serif';
+            ctx.fillText(`署名 ${node.approval} / 削除 ${node.removal}`, node._x, node._y + 12);
+        }
+
+        for (const child of (node.children ?? [])) {
+            drawNode(child);
+        }
+    }
+
+    for (const root of trees) {
+        drawLines(root);
+        drawNode(root);
+    }
+}
+
+export async function loadMsigTree() {
+    const container = document.getElementById('msig-tree-container');
+    if (!container) { console.warn('[loadMsigTree] #msig-tree-container not found'); return; }
+
+    container.innerHTML = '<div style="color:#888;padding:20px;text-align:center;font-size:13px;">読み込み中...</div>';
+
+    const activeAddr = window.SSS?.activeAddress;
+    if (!activeAddr) {
+        container.innerHTML = '<div style="color:#e53e3e;padding:20px;">SSSアカウント未接続</div>';
+        return;
+    }
+
+    try {
+        // ── 1. 自分の情報 + graph を取得 ──────────────────────────────
+        const [selfData, graph] = await Promise.all([
+            getMultisigAccountInfo(activeAddr).catch(() => null),
+            getMsigGraph(activeAddr).catch(() => []),
+        ]);
+        const selfMsig = selfData?.multisig;
+        console.log('[msigTree] graph levels:', graph?.length, 'selfMsig:', selfMsig);
+
+        // ── 2. 全ノードを accountAddress → info のマップに収集 ────────
+        const toAddr = raw => (!raw || raw === '' ? '' : raw.length === 48 ? hexToAddress(raw) : raw.length === 39 ? raw : '');
+        const nodeMap = new Map(); // addr -> { minApproval, minRemoval, cosignatoryAddresses[], multisigAddresses[] }
+
+        const addNode = (addr, msig) => {
+            if (!addr || nodeMap.has(addr)) return;
+            nodeMap.set(addr, {
+                minApproval: msig.minApproval ?? 0,
+                minRemoval:  msig.minRemoval  ?? 0,
+                cosignatories: (msig.cosignatoryAddresses ?? []).map(toAddr).filter(Boolean),
+                parents:       (msig.multisigAddresses    ?? []).map(toAddr).filter(Boolean),
+            });
+        };
+
+        for (const levelEntry of (graph ?? [])) {
+            for (const entry of (levelEntry.multisigEntries ?? [])) {
+                const msig = entry.multisig ?? entry;
+                const addr = toAddr(msig.accountAddress ?? '');
+                if (addr) addNode(addr, msig);
+            }
+        }
+
+        // 自分自身もマップに追加（leaf の場合）
+        if (!nodeMap.has(activeAddr) && selfMsig) addNode(activeAddr, selfMsig);
+        if (!nodeMap.has(activeAddr)) {
+            nodeMap.set(activeAddr, { minApproval: 0, minRemoval: 0, cosignatories: [], parents: [] });
+        }
+
+        // ── 3. ルートを特定（parents が空 or parents が全て nodeMap 外） ──
+        function findRoots() {
+            const roots = [];
+            for (const [addr, info] of nodeMap) {
+                const hasKnownParent = info.parents.some(p => nodeMap.has(p));
+                if (!hasKnownParent) roots.push(addr);
+            }
+            return roots.length > 0 ? roots : [activeAddr];
+        }
+
+        // ── 4. ツリーノードを再帰構築 ─────────────────────────────────
+        function buildNode(addr, visited = new Set()) {
+            if (visited.has(addr)) return null;
+            visited.add(addr);
+            const info = nodeMap.get(addr) ?? { minApproval: 0, minRemoval: 0, cosignatories: [], parents: [] };
+            const children = info.cosignatories
+                .map(c => buildNode(c, visited))
+                .filter(Boolean);
+            return {
+                addr,
+                isMsig: info.cosignatories.length > 0,
+                minApproval: info.minApproval,
+                minRemoval:  info.minRemoval,
+                isActive: addr === activeAddr,
+                children,
+            };
+        }
+
+        const roots = findRoots();
+        const trees = roots.map(r => buildNode(r)).filter(Boolean);
+
+        if (trees.length === 0) {
+            container.innerHTML = '<div style="color:#888;padding:20px;text-align:center;">マルチシグ情報がありません</div>';
+            return;
+        }
+
+        // ── 5. レイアウト計算 ─────────────────────────────────────────
+        const NODE_W = 180, NODE_H = 72, H_GAP = 24, V_GAP = 60;
+
+        function countLeaves(node) {
+            if (node.children.length === 0) return 1;
+            return node.children.reduce((s, c) => s + countLeaves(c), 0);
+        }
+
+        function assignPositions(node, xStart, depth) {
+            const leaves = countLeaves(node);
+            const w = leaves * NODE_W + (leaves - 1) * H_GAP;
+            node._x = xStart + w / 2 - NODE_W / 2;
+            node._y = depth * (NODE_H + V_GAP);
+            let childX = xStart;
+            for (const child of node.children) {
+                const childLeaves = countLeaves(child);
+                const childW = childLeaves * NODE_W + (childLeaves - 1) * H_GAP;
+                assignPositions(child, childX, depth + 1);
+                childX += childW + H_GAP;
+            }
+        }
+
+        // 複数ルートを横に並べる
+        let totalX = 0;
+        let maxDepth = 0;
+        function getMaxDepth(node, d) {
+            maxDepth = Math.max(maxDepth, d);
+            node.children.forEach(c => getMaxDepth(c, d + 1));
+        }
+        trees.forEach(t => {
+            assignPositions(t, totalX, 0);
+            const leaves = countLeaves(t);
+            totalX += leaves * NODE_W + (leaves - 1) * H_GAP + H_GAP * 4;
+            getMaxDepth(t, 0);
+        });
+
+        const svgW = Math.max(totalX, 400);
+        const svgH = (maxDepth + 1) * (NODE_H + V_GAP) + 40;
+
+        // ── 6. SVG 描画 ──────────────────────────────────────────────
+        const addrShort = a => a ? (a.slice(0, 6) + '...' + a.slice(-6)) : '?';
+
+        function renderNode(node) {
+            const x = node._x, y = node._y + 20;
+            const bg = node.isActive ? '#a78bfa' : node.isMsig ? 'url(#gradMsig)' : 'url(#gradCosig)';
+            const stroke = node.isActive ? '#7c3aed' : node.isMsig ? '#c084fc' : '#67e8f9';
+
+            let lines = `<text x="${x + NODE_W / 2}" y="${y + 20}" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">${addrShort(node.addr)}</text>`;
+            if (node.isMsig) {
+                lines += `<text x="${x + NODE_W / 2}" y="${y + 36}" text-anchor="middle" font-size="10" fill="#e9d5ff">最小承認者数: ${node.minApproval}</text>`;
+                lines += `<text x="${x + NODE_W / 2}" y="${y + 50}" text-anchor="middle" font-size="10" fill="#e9d5ff">最小削除承認者数: ${node.minRemoval}</text>`;
+            }
+
+            let childSvg = '';
+            for (const child of node.children) {
+                const cx = child._x + NODE_W / 2;
+                const cy = child._y + 20;
+                const px = x + NODE_W / 2;
+                const py = y + NODE_H;
+                const midY = (py + cy) / 2;
+                childSvg += `<path d="M${px},${py} L${px},${midY} L${cx},${midY} L${cx},${cy}" fill="none" stroke="#94a3b8" stroke-width="1.5"/>`;
+                childSvg += renderNode(child);
+            }
+
+            return `${childSvg}
+<rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="10" ry="10"
+      fill="${bg}" stroke="${stroke}" stroke-width="2"/>
+${lines}`;
+        }
+
+        const allNodesSvg = trees.map(t => renderNode(t)).join('');
+
+        const svgHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" style="font-family:sans-serif;min-width:${svgW}px;">
+  <defs>
+    <linearGradient id="gradMsig" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+    <linearGradient id="gradCosig" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+  ${allNodesSvg}
+</svg>`;
+
+        container.innerHTML = `<div style="overflow:auto;padding:12px;">${svgHtml}</div>`;
+
+    } catch (e) {
+        console.error('[loadMsigTree] error:', e);
+        container.innerHTML = `<div style="color:#e53e3e;padding:20px;">取得失敗: ${e?.message ?? String(e)}</div>`;
+    }
+}
+
+

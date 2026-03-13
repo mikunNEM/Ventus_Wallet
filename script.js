@@ -1436,7 +1436,7 @@ setTimeout(() => {  //////////////////  指定した時間後に実行する  //
             // tbl の border 属性を 1 に設定
             tbl.setAttribute("border", "1");
 
-            select_Meta.push({ value: "Pointy", name: "　　Poinyに登録", type: "Type" }); // Pointy ポイントアプリに表示するために特定キーのメタデータを編集
+
 
             console.log("%cselect_Meta:", "color: red", select_Meta); // Metadata　セレクトボックス ///////
 
@@ -5316,7 +5316,7 @@ function select_Page_meta() {
       // tbl の border 属性を 2 に設定
       tbl.setAttribute("border", "1");
 
-      select_Meta.push({ value: "Pointy", name: "　　Pointyに登録", type: "Type" }); // Pointy ポイントアプリに表示するために特定キーのメタデータを編集
+
 
       console.log("%cselect_Meta:", "color: red", select_Meta); // Metadata　セレクトボックス ///////
 

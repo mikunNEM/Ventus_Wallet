@@ -12,15 +12,21 @@ import { NODE, epochAdjustment } from './config.js';
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * GET リクエストを投げてJSONを返す
+ * GET / POST リクエストを投げてJSONを返す
  * @param {string|URL} url
+ * @param {'GET'|'POST'} method
+ * @param {object|null} body - POST時のリクエストボディ（省略可）
  * @returns {Promise<any>}
  */
-export async function fetchJson(url) {
-    const res = await fetch(url, {
-        method: 'GET',
+export async function fetchJson(url, method = 'GET', body = null) {
+    const options = {
+        method,
         headers: { 'Content-Type': 'application/json' },
-    });
+    };
+    if (method === 'POST' && body !== null) {
+        options.body = JSON.stringify(body);
+    }
+    const res = await fetch(url, options);
     if (!res.ok) throw new Error(`fetchJson error: ${res.status} ${url}`);
     return res.json();
 }
@@ -76,8 +82,14 @@ export async function postJson(url, body) {
  * @param {string} address - 39文字のアドレス文字列
  */
 export async function getAccountInfo(address) {
-    const data = await fetchJson(new URL(`/accounts/${address}`, NODE));
-    return data.account;
+    try {
+        const data = await fetchJson(new URL(`/accounts/${address}`, NODE));
+        return data.account;
+    } catch (e) {
+        // 404 = オンチェーン未認識（新規アカウント）→ null を返して継続
+        if (String(e.message).includes('404')) return null;
+        throw e;
+    }
 }
 
 /**
@@ -87,6 +99,22 @@ export async function getAccountInfo(address) {
 export async function getMultisigAccountInfo(address) {
     return fetchJson(new URL(`/account/${address}/multisig`, NODE));
 }
+
+/**
+ * マルチシググラフ（全階層）を取得する
+ * GET /account/{address}/multisig/graph
+ * 戻り値: Array of { level, multisigEntries: [{multisig:{minApproval, minRemoval, multisigAddresses, cosignatoryAddresses}}] }
+ */
+export async function getMsigGraph(address) {
+    try {
+        const data = await fetchJson(new URL(`/account/${address}/multisig/graph`, NODE));
+        return data; // 配列
+    } catch (e) {
+        if (String(e.message).includes('404')) return [];
+        throw e;
+    }
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // モザイク
@@ -230,16 +258,18 @@ export async function getTransactionsByIds(transactionIds) {
  */
 export async function announceTransaction(payloadHex, isBonded = false) {
     const endpoint = isBonded ? '/transactions/partial' : '/transactions';
+    console.log('[announceTransaction] endpoint:', endpoint, 'payloadHex length:', payloadHex?.length);
     const res = await fetch(new URL(endpoint, NODE), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payload: payloadHex }),
     });
+    const resJson = await res.json().catch(() => ({}));
+    console.log('[announceTransaction] status:', res.status, 'response:', resJson);
     if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(`announceTransaction failed: ${JSON.stringify(err)}`);
+        throw new Error(`announceTransaction failed: ${JSON.stringify(resJson)}`);
     }
-    return res.json();
+    return resJson;
 }
 
 /**

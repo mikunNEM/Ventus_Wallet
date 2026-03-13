@@ -510,7 +510,7 @@ input[type="file"] {
   box-shadow: 5px 5px 5px rgb(102, 113, 102);
 }
 
-@media screen and (max-width:  480px) {
+@media screen and (max-width: 480px) {
   .tx-card {
     background: rgb(255, 255, 255,0.8);
     border-radius: 16px;
@@ -519,7 +519,26 @@ input[type="file"] {
     padding: 32px 32px 32px 32px;
     box-shadow: 5px 5px 5px rgb(102, 113, 102);
   }
+}
 
+/* ═══════════════════════════════════════════════════
+   Transaction History — Modern Card UI
+   ═══════════════════════════════════════════════════ */
+
+.txh-card {
+  background: rgba(255,255,255,0.82);
+  border-radius: 12px;
+  border-left: 4px solid #9060e0;
+  box-shadow: 0 2px 10px rgba(80,40,160,0.10);
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: box-shadow 0.2s, background 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.txh-card:hover {
+  background: rgba(255,255,255,0.95);
+  box-shadow: 0 4px 18px rgba(80,40,160,0.18);
 }
 
 a.btn-style-link{
@@ -3182,6 +3201,7 @@ hr {
   z-index: 700;
   opacity: 0;
   visibility: hidden;
+  pointer-events: none;   /* 非表示時はクリックを通過させる */
   transition: .6s;
   display: flex;
   align-items: center;
@@ -3189,6 +3209,7 @@ hr {
 .popup_multisig.is-show {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;   /* 表示時はクリックを受け取る */
 }
 .popup_multisig-inner {
   position: relative;
@@ -3422,4 +3443,841 @@ th,td {
   padding-top: 140px;
   z-index:20000;
   background: url("./src/kurukuru.gif") center center no-repeat;
+}
+/* ─────────────────────────────────────────────── */
+/* Multisig Account Panel - Cosigner Card UI       */
+/* ─────────────────────────────────────────────── */
+
+.msig-status-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #f39c12, #e67e22);
+  color: #fff;
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 13px;
+  font-weight: bold;
+  margin: 6px 0 4px;
+}
+.msig-status-badge.new {
+  background: linear-gradient(135deg, #27ae60, #2ecc71);
+}
+.msig-status-vals {
+  font-size: 14px;
+  color: #555;
+  margin-bottom: 8px;
+}
+
+.msig-section-label {
+  font-size: 13px;
+  font-weight: bold;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 12px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+/* 既存連署者カード */
+.msig-cosig-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 7px 12px;
+  margin-bottom: 6px;
+  transition: background 0.2s, opacity 0.2s;
+}
+.msig-cosig-card.msig-cosig-queued {
+  opacity: 0.4;
+  background: #ffe8e8;
+  border-color: #f5c6c6;
+}
+
+/* アドレス表示 */
+.msig-cosig-addr {
+  font-size: 12px;
+  font-family: monospace;
+  word-break: break-all;
+  flex: 1;
+  color: #333;
+}
+.msig-cosig-addr.del {
+  color: #c0392b;
+  text-decoration: line-through;
+}
+.msig-cosig-addr.add {
+  color: #27ae60;
+}
+
+/* 🗑️ 削除ボタン */
+.msig-del-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.msig-del-btn:hover:not(:disabled) {
+  background: #ffe0e0;
+}
+.msig-del-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+/* ↩️ 取り消しボタン */
+.msig-undo-btn {
+  background: none;
+  border: 1px solid #ccc;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: #666;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.msig-undo-btn:hover {
+  background: #f0f0f0;
+}
+
+/* 削除予定アイテム */
+.msig-delete-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff5f5;
+  border: 1px dashed #f5c6c6;
+  border-radius: 8px;
+  padding: 6px 12px;
+  margin-bottom: 5px;
+}
+
+/* 追加予定アイテム */
+.msig-add-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f0fff4;
+  border: 1px dashed #c3e6cb;
+  border-radius: 8px;
+  padding: 6px 12px;
+  margin-bottom: 5px;
+}
+
+/* msig-hint: 補足テキスト */
+.msig-hint {
+  display: block;
+  font-size: 11px;
+  color: #aaa;
+  margin-top: 3px;
+}
+
+/* 連署者アカウントへの切り替え案内 */
+.msig-cosigner-notice {
+  margin: 8px 4px 4px;
+  padding: 10px 14px;
+  background: #fff8e1;
+  border-left: 4px solid #f39c12;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #6d4c00;
+  line-height: 1.7;
+  text-align: left;
+}
+
+/* 対象アカウント選択セレクト */
+.msig-target-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px solid #3498db;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #333;
+  background: #fff;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.msig-target-select:focus {
+  border-color: #2980b9;
+  box-shadow: 0 0 0 3px rgba(52,152,219,0.15);
+}
+
+/* アドレステキスト（非選択時） */
+.msig-addr-text {
+  display: block;
+  font-size: 12px;
+  font-family: monospace;
+  word-break: break-all;
+  color: #555;
+  padding: 4px 0;
+}
+
+/* ✅ 連署者OK状態のインフォボックス */
+.msig-cosigner-notice.msig-cosigner-ok {
+  background: #e8f8f0;
+  border-left-color: #27ae60;
+  color: #1a5c36;
+}
+
+/* ═══════════════════════════════════════════════════
+   Multisig ツリー ポップアップ
+   ═══════════════════════════════════════════════════ */
+.popup_MsigTree {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9000;
+  align-items: center;
+  justify-content: center;
+}
+.popup_MsigTree.is-show {
+  display: flex;
+}
+.popup_MsigTree-inner {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+  width: min(1200px, 96vw);
+  height: min(85vh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.popup_MsigTree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e8e0f0;
+  background: linear-gradient(90deg, #f8eefe, #fdf0fb);
+}
+.popup_MsigTree-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #6020a0;
+}
+.popup_MsigTree-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #aaa;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.popup_MsigTree-close:hover { background: #f0e0f8; color: #600; }
+.popup_MsigTree-body {
+  flex: 1;
+  padding: 16px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fcfaff;
+}
+#msig-tree-canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #ede0fa;
+}
+
+/* ═══════════════════════════════════════════════════
+   アカウント種別バッジ
+   ═══════════════════════════════════════════════════ */
+.msig-badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.msig-badge--msig {
+  background: linear-gradient(90deg, #fce4f6, #f0d8ff);
+  color: #7a006a;
+  border: 1.5px solid #e060c0;
+}
+.msig-badge--cosig {
+  background: linear-gradient(90deg, #dbeeff, #e0d8ff);
+  color: #00308a;
+  border: 1.5px solid #4090e8;
+}
+.msig-badge--both {
+  background: linear-gradient(90deg, #fce4f6, #dbeeff);
+  color: #40006a;
+  border: 1.5px solid #a040d0;
+}
+.msig-badge--normal {
+  background: #f0f0f0;
+  color: #777;
+  border: 1.5px solid #ccc;
+}
+
+/* ═══════════════════════════════════════════════════
+   マルチシグ送信パネル リデザイン (msig-send-*)
+   ═══════════════════════════════════════════════════ */
+
+/* ── カード全体 ───────────────────────────────────── */
+.popup_multisig-inner.msig-send-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 12px 48px rgba(80, 0, 120, 0.18);
+  max-width: 520px;
+  width: 96vw;
+  max-height: 92vh;
+  overflow-y: auto;
+  background: #fff;
+}
+
+/* ── ヘッダー ─────────────────────────────────────── */
+.msig-send-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px 14px;
+  background: linear-gradient(135deg, #f5e6ff 0%, #e8f4ff 100%);
+  border-bottom: 1px solid #e8d8f8;
+}
+.msig-send-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.msig-send-icon { font-size: 28px; line-height: 1; }
+.msig-send-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: #4a0080;
+  line-height: 1.2;
+}
+.msig-send-subtitle {
+  font-size: 11px;
+  color: #9060b0;
+  margin-top: 2px;
+  font-family: monospace;
+}
+.msig-send-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #bbb;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.msig-send-close:hover { background: #f8e0f8; color: #700; }
+
+/* ── 送信元バッジ ─────────────────────────────────── */
+.msig-send-from-box {
+  margin: 16px 20px 0;
+  background: linear-gradient(90deg, #fff5ff, #f0f8ff);
+  border: 1.5px solid #d0b0f0;
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+.msig-send-from-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9060b0;
+  margin-bottom: 4px;
+}
+.msig-send-from-addr {
+  font-size: 12px;
+  font-family: monospace;
+  color: #3a005a;
+  word-break: break-all;
+}
+
+/* ── フォーム本体 ─────────────────────────────────── */
+.msig-send-form {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── 個別フィールド ───────────────────────────────── */
+.msig-send-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.msig-send-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #555;
+  letter-spacing: 0.02em;
+}
+.msig-send-input {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1.5px solid #ddd;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #333;
+  background: #fafafa;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+  outline: none;
+  font-family: inherit;
+}
+.msig-send-input:focus {
+  border-color: #a040e0;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(160,64,224,0.12);
+}
+.msig-send-textarea {
+  resize: vertical;
+  min-height: 70px;
+  line-height: 1.5;
+}
+
+/* ── モザイク行 ───────────────────────────────────── */
+.msig-send-mosaic-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.msig-send-mosaic-select select {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1.5px solid #ddd;
+  border-radius: 10px;
+  font-size: 14px;
+  background: #fafafa;
+  outline: none;
+  cursor: pointer;
+}
+.msig-send-balance {
+  font-size: 12px;
+  text-align: right;
+  padding-right: 4px;
+}
+
+/* ── 手数料インフォ ───────────────────────────────── */
+.msig-send-fee-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #fffbe8;
+  border: 1.5px solid #f0d800;
+  border-radius: 10px;
+  padding: 10px 13px;
+}
+.msig-send-fee-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.msig-send-fee-main {
+  font-size: 13px;
+  color: #7a5800;
+  font-weight: 600;
+}
+.msig-send-fee-sub {
+  font-size: 11px;
+  color: #a07020;
+  margin-top: 3px;
+  line-height: 1.5;
+}
+
+/* ── 送信ボタン ───────────────────────────────────── */
+.msig-send-btn {
+  width: 100%;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #8020c0, #4060e8);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: opacity 0.2s, transform 0.1s;
+  letter-spacing: 0.03em;
+}
+.msig-send-btn:hover { opacity: 0.92; transform: translateY(-1px); }
+.msig-send-btn:active { transform: translateY(0); }
+.msig-send-btn-arrow { font-size: 18px; }
+
+/* ── 高度なオプション（折りたたみ） ─────────────── */
+.msig-send-advanced {
+  border: 1.5px solid #e8e0ef;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.msig-send-advanced-toggle {
+  padding: 9px 13px;
+  font-size: 12px;
+  color: #7050a0;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  background: #f8f0ff;
+  font-weight: 600;
+}
+.msig-send-advanced-toggle::-webkit-details-marker { display: none; }
+.msig-send-advanced-body {
+  padding: 12px 14px;
+  background: #fff;
+}
+.msig-send-adv-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.msig-send-adv-label { font-size: 13px; color: #555; }
+.msig-send-adv-file-btn {
+  display: inline-block;
+  padding: 7px 14px;
+  background: linear-gradient(90deg, #e8f0ff, #f0e8ff);
+  border: 1.5px solid #c0b0e0;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #5030a0;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.msig-send-adv-file-btn:hover { background: linear-gradient(90deg, #d8e8ff, #e8d8ff); }
+.msig-send-adv-filename {
+  font-size: 12px;
+  color: #aaa;
+  font-style: italic;
+}
+
+/* ═══════════════════════════════════════════════════
+   Transaction History — Modern Card UI
+   ═══════════════════════════════════════════════════ */
+
+/* カード本体 */
+.txh-card {
+  background: rgba(255,255,255,0.75);
+  border-radius: 12px;
+  border-left: 4px solid #9060e0;
+  box-shadow: 0 2px 10px rgba(80,40,160,0.10);
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: box-shadow 0.2s, background 0.2s;
+  width: 100%;           /* 親コンテナの幅に収める */
+  box-sizing: border-box;
+}
+.txh-card:hover {
+  background: rgba(255,255,255,0.90);
+  box-shadow: 0 4px 18px rgba(80,40,160,0.18);
+}
+
+/* TX種別ごとの左ボーダー色 */
+.txh-card[data-type="transfer-out"]  { border-left-color: #e04040; }
+.txh-card[data-type="transfer-in"]   { border-left-color: #20b060; }
+.txh-card[data-type="aggregate"]     { border-left-color: #d08000; }
+.txh-card[data-type="namespace"]     { border-left-color: #0090c0; }
+.txh-card[data-type="mosaic"]        { border-left-color: #9000c0; }
+.txh-card[data-type="hashlock"]      { border-left-color: #808080; }
+.txh-card[data-type="other"]         { border-left-color: #a0a0a0; }
+
+/* ヘッダーバー（種別バッジ + 日時 + Infoボタン） */
+.txh-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  background: rgba(248,245,255,0.5);
+  border-bottom: 1px solid rgba(240,234,252,0.8);
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.txh-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* TX種別バッジ */
+.txh-type-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: linear-gradient(90deg, #ede0ff, #dbeeff);
+  color: #5020a0;
+  border: 1px solid #c8aaf0;
+}
+.txh-type-badge.transfer-out { background: linear-gradient(90deg, #ffe0e0, #fff0e0); color: #a02020; border-color: #f0b0b0; }
+.txh-type-badge.transfer-in  { background: linear-gradient(90deg, #e0ffe8, #e8ffe0); color: #006030; border-color: #90d0a0; }
+.txh-type-badge.aggregate    { background: linear-gradient(90deg, #fff8e0, #ffefd0); color: #7a5000; border-color: #e0c060; }
+.txh-type-badge.namespace    { background: linear-gradient(90deg, #e0f4ff, #dbeeff); color: #005580; border-color: #80c0e0; }
+.txh-type-badge.mosaic       { background: linear-gradient(90deg, #f0e0ff, #ffe0f8); color: #6000a0; border-color: #c080e0; }
+.txh-type-badge.hashlock     { background: #f0f0f0;                                  color: #666;    border-color: #ccc; }
+
+/* 日時 + Infoリンク */
+.txh-card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.txh-date {
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  color: #7050a0;
+  white-space: nowrap;
+}
+.txh-info-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #5050c0;
+  background: linear-gradient(90deg, #eeeaff, #e8f0ff);
+  border: 1px solid #c0c0f0;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.txh-info-link:hover { background: linear-gradient(90deg, #e0daff, #d8e8ff); }
+
+/* カード本文 */
+.txh-body {
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* アドレス行 */
+.txh-address-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #334;
+}
+.txh-address-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #998;
+  min-width: 36px;
+}
+.txh-address-mono {
+  font-family: 'Courier New', monospace;
+  font-size: 11.5px;
+  color: #334;
+  word-break: break-all;
+  flex: 1;
+}
+.txh-copy-btn {
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.txh-copy-btn:hover { opacity: 0.9; }
+
+/* 金額 / モザイク */
+.txh-amount-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+}
+.txh-amount-row.send { color: #c02020; }
+.txh-amount-row.recv { color: #207040; }
+.txh-amount-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: inherit; opacity: 0.7; }
+.txh-amount-value { font-size: 15px; font-weight: 800; letter-spacing: 0.02em; }
+.txh-mosaic-name  { font-size: 12px; opacity: 0.75; }
+
+/* メッセージ */
+.txh-message {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: #f8f4ff;
+  border-left: 3px solid #c090f0;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #503080;
+  line-height: 1.6;
+  word-break: break-all;
+}
+.txh-message-enc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: linear-gradient(90deg, #ffe0ff, #f0e0ff);
+  color: #8000a0;
+  border: 1px solid #e090f0;
+  cursor: pointer;
+}
+.txh-message-enc:hover { background: linear-gradient(90deg, #ffd0ff, #e8d0ff); }
+
+/* Aggregate 内部Txリスト */
+.txh-inner-list {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.txh-inner-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(240,235,255,0.6);
+  font-size: 12px;
+  color: #504020;
+  word-break: break-all;
+  flex-wrap: wrap;
+  line-height: 1.5;
+}
+.txh-inner-item.send {
+  background: linear-gradient(90deg, rgba(255,235,235,0.8), rgba(255,245,235,0.8));
+  color: #802020;
+  border-left: 3px solid #e04040;
+  font-weight: 600;
+}
+.txh-inner-item.recv {
+  background: linear-gradient(90deg, rgba(235,255,240,0.8), rgba(235,255,250,0.8));
+  color: #205030;
+  border-left: 3px solid #20b060;
+  font-weight: 600;
+}
+.txh-inner-item.other {
+  background: rgba(240,240,245,0.7);
+  color: #555;
+  border-left: 3px solid #aaa;
+  font-style: italic;
+}
+
+/* 復号ボタン */
+.txh-decrypt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: linear-gradient(90deg, #f0e8ff, #e8f0ff);
+  border: 1px solid #c0b0f0;
+  color: #5020a0;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.txh-decrypt-btn:hover { background: linear-gradient(90deg, #e8d8ff, #d8e8ff); }
+
+/* ── Aggregate アコーディオン ───────────────────── */
+.txh-agg-details {
+  margin-top: 6px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.txh-agg-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #fff8e8, #fdf0d0);
+  border: 1.5px solid #e8c060;
+  color: #7a5000;
+  font-size: 12px;
+  font-weight: 700;
+  user-select: none;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.txh-agg-summary::-webkit-details-marker { display: none; }
+.txh-agg-summary::before {
+  content: '▶';
+  font-size: 10px;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+.txh-agg-details[open] > .txh-agg-summary::before {
+  transform: rotate(90deg);
+}
+.txh-agg-details[open] > .txh-agg-summary {
+  border-radius: 10px 10px 0 0;
+  background: linear-gradient(90deg, #fff0c0, #ffe8a0);
+}
+.txh-agg-details[open] > .txh-inner-list {
+  border: 1.5px solid #e8c060;
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  padding: 6px;
+  background: rgba(255,252,240,0.6);
+}
+
+/* Aggregate NFT area (accordion外、常に表示) */
+.txh-agg-nft-area {
+  margin: 6px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+/* NFT画像コンテナ (センタリング) */
+.txh-nft-container {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+/* Aggregate メッセージエリア (accordion外、常に表示) */
+.txh-agg-msg-area {
+  margin: 4px 0;
+}
+.txh-agg-msg-item {
+  background: rgba(245,245,220,0.85);
+  border-left: 3px solid #c0a060;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #5a4010;
+  font-style: italic;
+  margin-bottom: 4px;
+  word-break: break-all;
 }
