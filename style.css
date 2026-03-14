@@ -3680,12 +3680,19 @@ th,td {
 .popup_MsigTree-close:hover { background: #f0e0f8; color: #600; }
 .popup_MsigTree-body {
   flex: 1;
-  padding: 16px;
+  padding: 8px 12px;
   overflow: hidden;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
   background: #fcfaff;
+}
+#msig-tree-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
 }
 #msig-tree-canvas {
   display: block;

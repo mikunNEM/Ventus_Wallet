@@ -23,7 +23,7 @@ import {
 
 import {
     fetchJson, hexToAddress,
-    getAccountInfo, getMultisigAccountInfo,
+    getAccountInfo, getMultisigAccountInfo, getMsigGraph,
     getMosaicInfo, getMosaicsNames, getMosaics, searchMosaics,
     getNamespacesNames, searchNamespaces,
     searchConfirmedTransactions, searchUnconfirmedTransactions, searchPartialTransactions,
@@ -845,7 +845,7 @@ async function main() {
     window.MetaKey_select     = () => MetaKey_select();
 
     // マルチシグ関連初期化
-    try { initMsigAddButton(); } catch(e) { console.warn('[main] initMsigAddButton error:', e); }
+    // initMsigAddButton は未実装（将来実装予定）
     await updateMsigBadge(activeAddress);
     await loadMsigPanelInfo();
 
@@ -899,7 +899,7 @@ async function initAccountAndUI() {
     window.MetaKey_select = () => MetaKey_select();
 
     console.log('[initAccountAndUI] step: window assignments done');
-    try { initMsigAddButton(); } catch(e) { console.warn('[initAccountAndUI] initMsigAddButton error:', e); }
+    // initMsigAddButton は未実装（将来実装予定）
     console.log('[initAccountAndUI] step: before updateMsigBadge');
     try { await updateMsigBadge(addr); } catch(e) { console.warn('[initAccountAndUI] updateMsigBadge error:', e); }
     console.log('[initAccountAndUI] アカウント初期化完了:', addr);
@@ -2551,7 +2551,7 @@ export async function loadMsigTree() {
     const container = document.getElementById('msig-tree-container');
     if (!container) { console.warn('[loadMsigTree] #msig-tree-container not found'); return; }
 
-    container.innerHTML = '<div style="color:#888;padding:20px;text-align:center;font-size:13px;">読み込み中...</div>';
+    container.innerHTML = '<div style="color:#888;padding:20px;text-align:center;">読み込み中...</div>';
 
     const activeAddr = window.SSS?.activeAddress;
     if (!activeAddr) {
@@ -2560,152 +2560,165 @@ export async function loadMsigTree() {
     }
 
     try {
-        // ── 1. 自分の情報 + graph を取得 ──────────────────────────────
         const [selfData, graph] = await Promise.all([
             getMultisigAccountInfo(activeAddr).catch(() => null),
             getMsigGraph(activeAddr).catch(() => []),
         ]);
         const selfMsig = selfData?.multisig;
-        console.log('[msigTree] graph levels:', graph?.length, 'selfMsig:', selfMsig);
 
-        // ── 2. 全ノードを accountAddress → info のマップに収集 ────────
-        const toAddr = raw => (!raw || raw === '' ? '' : raw.length === 48 ? hexToAddress(raw) : raw.length === 39 ? raw : '');
-        const nodeMap = new Map(); // addr -> { minApproval, minRemoval, cosignatoryAddresses[], multisigAddresses[] }
-
+        // ── ノードマップ構築 ─────────────────────────────────────────
+        const toAddr = raw => (!raw ? '' : raw.length === 48 ? hexToAddress(raw) : raw.length === 39 ? raw : '');
+        const nodeMap = new Map();
         const addNode = (addr, msig) => {
             if (!addr || nodeMap.has(addr)) return;
             nodeMap.set(addr, {
                 minApproval: msig.minApproval ?? 0,
                 minRemoval:  msig.minRemoval  ?? 0,
-                cosignatories: (msig.cosignatoryAddresses ?? []).map(toAddr).filter(Boolean),
-                parents:       (msig.multisigAddresses    ?? []).map(toAddr).filter(Boolean),
+                cosigs:  (msig.cosignatoryAddresses ?? []).map(toAddr).filter(Boolean),
+                parents: (msig.multisigAddresses    ?? []).map(toAddr).filter(Boolean),
             });
         };
-
-        for (const levelEntry of (graph ?? [])) {
-            for (const entry of (levelEntry.multisigEntries ?? [])) {
-                const msig = entry.multisig ?? entry;
-                const addr = toAddr(msig.accountAddress ?? '');
-                if (addr) addNode(addr, msig);
+        for (const lv of (graph ?? [])) {
+            for (const e of (lv.multisigEntries ?? [])) {
+                const msig = e.multisig ?? e;
+                addNode(toAddr(msig.accountAddress ?? ''), msig);
             }
         }
-
-        // 自分自身もマップに追加（leaf の場合）
         if (!nodeMap.has(activeAddr) && selfMsig) addNode(activeAddr, selfMsig);
-        if (!nodeMap.has(activeAddr)) {
-            nodeMap.set(activeAddr, { minApproval: 0, minRemoval: 0, cosignatories: [], parents: [] });
-        }
+        if (!nodeMap.has(activeAddr)) nodeMap.set(activeAddr, { minApproval:0, minRemoval:0, cosigs:[], parents:[] });
 
-        // ── 3. ルートを特定（parents が空 or parents が全て nodeMap 外） ──
-        function findRoots() {
-            const roots = [];
-            for (const [addr, info] of nodeMap) {
-                const hasKnownParent = info.parents.some(p => nodeMap.has(p));
-                if (!hasKnownParent) roots.push(addr);
+        // ── nodeMap に未登録のコサイナーを追加でフェッチ ────────────────
+        // getMsigGraph は carol5 の直系パスのみ返すので、
+        // 兄弟マルチシグ（例: carol2）の子が取得されない。
+        // cosignatoryAddresses に出てくる未登録アドレスを追加フェッチする。
+        {
+            const allCosigAddrs = new Set();
+            for (const info of nodeMap.values()) {
+                for (const c of info.cosigs) allCosigAddrs.add(c);
             }
-            return roots.length > 0 ? roots : [activeAddr];
+            const unknownAddrs = [...allCosigAddrs].filter(a => !nodeMap.has(a));
+            if (unknownAddrs.length > 0) {
+                const fetchResults = await Promise.all(
+                    unknownAddrs.map(a => getMultisigAccountInfo(a).catch(() => null))
+                );
+                unknownAddrs.forEach((a, i) => {
+                    const msig = fetchResults[i]?.multisig;
+                    if (msig) {
+                        addNode(a, msig);
+                    } else {
+                        // 通常アカウント（連署者のみ）
+                        nodeMap.set(a, { minApproval:0, minRemoval:0, cosigs:[], parents:[] });
+                    }
+                });
+            }
         }
 
-        // ── 4. ツリーノードを再帰構築 ─────────────────────────────────
-        function buildNode(addr, visited = new Set()) {
-            if (visited.has(addr)) return null;
-            visited.add(addr);
-            const info = nodeMap.get(addr) ?? { minApproval: 0, minRemoval: 0, cosignatories: [], parents: [] };
-            const children = info.cosignatories
-                .map(c => buildNode(c, visited))
-                .filter(Boolean);
+                // ── ルート探索 ───────────────────────────────────────────────
+        let roots = [...nodeMap.keys()].filter(a => {
+            const pars = nodeMap.get(a).parents;
+            return pars.length === 0 || !pars.some(p => nodeMap.has(p));
+        });
+        if (roots.length === 0) roots = [activeAddr];
+
+        // ── ツリー構築 ───────────────────────────────────────────────
+        // ancestors: 現在の再帰スタック（循環のみ防ぐ。同じノードが別ブランチに出ることは許可する）
+        function buildNode(addr, ancestors = new Set()) {
+            if (ancestors.has(addr)) return null; // 真の循環のみ防ぐ
+            const info = nodeMap.get(addr) ?? { cosigs:[], parents:[], minApproval:0, minRemoval:0 };
+            const newAnc = new Set(ancestors);
+            newAnc.add(addr);
             return {
                 addr,
-                isMsig: info.cosignatories.length > 0,
-                minApproval: info.minApproval,
-                minRemoval:  info.minRemoval,
-                isActive: addr === activeAddr,
-                children,
+                isMsig:    info.cosigs.length > 0,
+                minAp:     info.minApproval,
+                minRm:     info.minRemoval,
+                isActive:  addr === activeAddr,
+                children:  info.cosigs.map(c => buildNode(c, newAnc)).filter(Boolean),
             };
         }
-
-        const roots = findRoots();
         const trees = roots.map(r => buildNode(r)).filter(Boolean);
 
-        if (trees.length === 0) {
-            container.innerHTML = '<div style="color:#888;padding:20px;text-align:center;">マルチシグ情報がありません</div>';
-            return;
-        }
-
-        // ── 5. レイアウト計算 ─────────────────────────────────────────
-        const NODE_W = 180, NODE_H = 72, H_GAP = 24, V_GAP = 60;
-
-        function countLeaves(node) {
-            if (node.children.length === 0) return 1;
-            return node.children.reduce((s, c) => s + countLeaves(c), 0);
-        }
-
-        function assignPositions(node, xStart, depth) {
-            const leaves = countLeaves(node);
-            const w = leaves * NODE_W + (leaves - 1) * H_GAP;
-            node._x = xStart + w / 2 - NODE_W / 2;
-            node._y = depth * (NODE_H + V_GAP);
-            let childX = xStart;
-            for (const child of node.children) {
-                const childLeaves = countLeaves(child);
-                const childW = childLeaves * NODE_W + (childLeaves - 1) * H_GAP;
-                assignPositions(child, childX, depth + 1);
-                childX += childW + H_GAP;
+        // ── レイアウト ───────────────────────────────────────────────
+        const NW=190, NH=72, HGAP=24, VGAP=60;
+        function countLeaves(n) { return n.children.length === 0 ? 1 : n.children.reduce((s,c)=>s+countLeaves(c),0); }
+        function layout(n, xStart, depth) {
+            const leaves = countLeaves(n);
+            const w = leaves*NW + (leaves-1)*HGAP;
+            n._x = xStart + (w - NW) / 2;
+            n._y = depth * (NH + VGAP);
+            let cx = xStart;
+            for (const c of n.children) {
+                const cl = countLeaves(c);
+                layout(c, cx, depth+1);
+                cx += cl*NW + (cl-1)*HGAP + HGAP;
             }
         }
-
-        // 複数ルートを横に並べる
-        let totalX = 0;
-        let maxDepth = 0;
-        function getMaxDepth(node, d) {
-            maxDepth = Math.max(maxDepth, d);
-            node.children.forEach(c => getMaxDepth(c, d + 1));
-        }
+        let totalX = 0, maxDepth = 0;
+        function getDepth(n, d) { maxDepth = Math.max(maxDepth, d); n.children.forEach(c=>getDepth(c,d+1)); }
         trees.forEach(t => {
-            assignPositions(t, totalX, 0);
-            const leaves = countLeaves(t);
-            totalX += leaves * NODE_W + (leaves - 1) * H_GAP + H_GAP * 4;
-            getMaxDepth(t, 0);
+            layout(t, totalX, 0);
+            totalX += countLeaves(t)*NW + (countLeaves(t)-1)*HGAP + HGAP*4;
+            getDepth(t, 0);
         });
 
-        const svgW = Math.max(totalX, 400);
-        const svgH = (maxDepth + 1) * (NODE_H + V_GAP) + 40;
+        const svgW = Math.max(totalX, 500);
+        const svgH = (maxDepth+1)*(NH+VGAP) + 60;
 
-        // ── 6. SVG 描画 ──────────────────────────────────────────────
-        const addrShort = a => a ? (a.slice(0, 6) + '...' + a.slice(-6)) : '?';
+        // ── SVG 描画 ─────────────────────────────────────────────────
+        const addrShort = a => a ? (a.slice(0,7)+'...'+a.slice(-7)) : '?';
 
-        function renderNode(node) {
-            const x = node._x, y = node._y + 20;
-            const bg = node.isActive ? '#a78bfa' : node.isMsig ? 'url(#gradMsig)' : 'url(#gradCosig)';
-            const stroke = node.isActive ? '#7c3aed' : node.isMsig ? '#c084fc' : '#67e8f9';
-
-            let lines = `<text x="${x + NODE_W / 2}" y="${y + 20}" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">${addrShort(node.addr)}</text>`;
-            if (node.isMsig) {
-                lines += `<text x="${x + NODE_W / 2}" y="${y + 36}" text-anchor="middle" font-size="10" fill="#e9d5ff">最小承認者数: ${node.minApproval}</text>`;
-                lines += `<text x="${x + NODE_W / 2}" y="${y + 50}" text-anchor="middle" font-size="10" fill="#e9d5ff">最小削除承認者数: ${node.minRemoval}</text>`;
+        function renderNode(n) {
+            const x=n._x, y=n._y+20;
+            let fillAttr, strokeAttr, strokeW;
+            if (n.isActive) {
+                // アクティブアカウント：金色グラジェント + グロー
+                fillAttr = 'url(#gradActive)';
+                strokeAttr = '#f59e0b';
+                strokeW = 3;
+            } else if (n.isMsig) {
+                fillAttr = 'url(#gradMsig)';
+                strokeAttr = '#c084fc';
+                strokeW = 2;
+            } else {
+                fillAttr = 'url(#gradCosig)';
+                strokeAttr = '#67e8f9';
+                strokeW = 1.5;
             }
 
+            let inner = `<text x="${x+NW/2}" y="${y+20}" text-anchor="middle" font-size="11" font-weight="bold" fill="#fff">${addrShort(n.addr)}</text>`;
+            if (n.isMsig) {
+                inner += `<text x="${x+NW/2}" y="${y+36}" text-anchor="middle" font-size="10" fill="#fff">最小承認者数: ${n.minAp}</text>`;
+                inner += `<text x="${x+NW/2}" y="${y+50}" text-anchor="middle" font-size="10" fill="#fff">最小削除承認者数: ${n.minRm}</text>`;
+            }
+
+            // グロー効果（アクティブのみ）
+            const glowEl = n.isActive
+                ? `<rect x="${x-4}" y="${y-4}" width="${NW+8}" height="${NH+8}" rx="14" ry="14" fill="none" stroke="#fcd34d" stroke-width="2" opacity="0.5"/>`
+                : '';
+
             let childSvg = '';
-            for (const child of node.children) {
-                const cx = child._x + NODE_W / 2;
-                const cy = child._y + 20;
-                const px = x + NODE_W / 2;
-                const py = y + NODE_H;
-                const midY = (py + cy) / 2;
-                childSvg += `<path d="M${px},${py} L${px},${midY} L${cx},${midY} L${cx},${cy}" fill="none" stroke="#94a3b8" stroke-width="1.5"/>`;
-                childSvg += renderNode(child);
+            for (const c of n.children) {
+                const px = x+NW/2, py = y+NH;
+                const cx2 = c._x+NW/2, cy2 = c._y+20;
+                const midY = (py+cy2)/2;
+                childSvg += `<path d="M${px},${py} L${px},${midY} L${cx2},${midY} L${cx2},${cy2}" fill="none" stroke="#94a3b8" stroke-width="1.5"/>`;
+                childSvg += renderNode(c);
             }
 
             return `${childSvg}
-<rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="10" ry="10"
-      fill="${bg}" stroke="${stroke}" stroke-width="2"/>
-${lines}`;
+${glowEl}
+<rect x="${x}" y="${y}" width="${NW}" height="${NH}" rx="10" ry="10" fill="${fillAttr}" stroke="${strokeAttr}" stroke-width="${strokeW}"/>
+${inner}`;
         }
 
-        const allNodesSvg = trees.map(t => renderNode(t)).join('');
+        const allSvg = trees.map(t=>renderNode(t)).join('');
 
-        const svgHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" style="font-family:sans-serif;min-width:${svgW}px;">
+        const svgHtml = `<svg id="msig-tree-svg" xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" style="display:block;cursor:grab;">
   <defs>
+    <linearGradient id="gradActive" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
     <linearGradient id="gradMsig" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#818cf8"/>
       <stop offset="100%" stop-color="#c084fc"/>
@@ -2715,15 +2728,83 @@ ${lines}`;
       <stop offset="100%" stop-color="#818cf8"/>
     </linearGradient>
   </defs>
-  ${allNodesSvg}
+  ${allSvg}
 </svg>`;
 
-        container.innerHTML = `<div style="overflow:auto;padding:12px;">${svgHtml}</div>`;
+        // ── Pan 可能なラッパー ────────────────────────────────────────
+        container.innerHTML = `
+<div style="padding:4px 8px;font-size:11px;color:#9ca3af;flex-shrink:0;">
+  🟡 現在のアカウント　🟣 マルチシグ　🔵 連署者　｜ ドラッグで移動できます
+</div>
+<div id="msig-pan-area" style="flex:1;overflow:hidden;cursor:grab;min-height:380px;position:relative;">
+  <div id="msig-pan-inner" style="position:absolute;top:0;left:0;will-change:transform;">
+    ${svgHtml}
+  </div>
+</div>`;
+
+
+        // ── ドラッグ pan ＋ ホイールズームイベント ─────────────────────
+        const panArea  = document.getElementById('msig-pan-area');
+        const panInner = document.getElementById('msig-pan-inner');
+        let isDragging = false, startX = 0, startY = 0, translateX = 0, translateY = 0, scale = 1;
+        const applyTransform = () => {
+            panInner.style.transform = `translate(${translateX}px,${translateY}px) scale(${scale})`;
+            panInner.style.transformOrigin = '0 0';
+        };
+        panArea.addEventListener('mousedown', e => {
+            isDragging = true;
+            startX = e.clientX - translateX;
+            startY = e.clientY - translateY;
+            panArea.style.cursor = 'grabbing';
+            e.preventDefault();
+        });
+        window.addEventListener('mousemove', e => {
+            if (!isDragging) return;
+            translateX = e.clientX - startX;
+            translateY = e.clientY - startY;
+            applyTransform();
+        });
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            if (panArea) panArea.style.cursor = 'grab';
+        });
+
+        // ホイールでズーム
+        panArea.addEventListener('wheel', e => {
+            e.preventDefault();
+            const rect = panArea.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const delta = e.deltaY < 0 ? 1.1 : 0.9;
+            const newScale = Math.min(3, Math.max(0.2, scale * delta));
+            // ズームの中心をマウス位置に合わせる
+            translateX = mouseX - (mouseX - translateX) * (newScale / scale);
+            translateY = mouseY - (mouseY - translateY) * (newScale / scale);
+            scale = newScale;
+            applyTransform();
+        }, { passive: false });
+
+        // タッチ対応
+        panArea.addEventListener('touchstart', e => {
+            const t = e.touches[0];
+            isDragging = true;
+            startX = t.clientX - translateX;
+            startY = t.clientY - translateY;
+        }, { passive: true });
+        panArea.addEventListener('touchmove', e => {
+            if (!isDragging) return;
+            const t = e.touches[0];
+            translateX = t.clientX - startX;
+            translateY = t.clientY - startY;
+            applyTransform();
+        }, { passive: true });
+        panArea.addEventListener('touchend', () => { isDragging = false; });
 
     } catch (e) {
         console.error('[loadMsigTree] error:', e);
         container.innerHTML = `<div style="color:#e53e3e;padding:20px;">取得失敗: ${e?.message ?? String(e)}</div>`;
     }
 }
+
 
 
