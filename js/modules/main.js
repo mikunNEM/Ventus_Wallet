@@ -1,11 +1,30 @@
 
-// モザイク情報キャッシュ（可分性取得の高速化）
+// モザイク情報キャッシュ（Promiseを格納して並行呼び出しの重複リクエストを防ぐ）
+// null = 404確認済み / Promise = 取得中or完了
 const _mosaicInfoCache = new Map();
+
 async function getMosaicInfoCached(mosaicIdHex) {
-    if (_mosaicInfoCache.has(mosaicIdHex)) return _mosaicInfoCache.get(mosaicIdHex);
-    const info = await getMosaicInfo(mosaicIdHex);
-    _mosaicInfoCache.set(mosaicIdHex, info);
-    return info;
+    // null = 404確認済み → すぐエラー
+    if (_mosaicInfoCache.get(mosaicIdHex) === null) {
+        throw new Error(`mosaic ${mosaicIdHex} not found (cached 404)`);
+    }
+    // Promise が既にある → 同じ結果を待つ（並行リクエストを1本に束ねる）
+    if (_mosaicInfoCache.has(mosaicIdHex)) {
+        return _mosaicInfoCache.get(mosaicIdHex);
+    }
+    // 初回: Promise を即座にキャッシュしてから実行
+    const promise = (async () => {
+        const moInfo = await getMosaicInfo(mosaicIdHex);
+        const names = (await getMosaicsNames([mosaicIdHex]).catch(() => null))?.[0]?.names ?? [];
+        return { moInfo, names };
+    })();
+    _mosaicInfoCache.set(mosaicIdHex, promise);
+    try {
+        return await promise;
+    } catch (e) {
+        _mosaicInfoCache.set(mosaicIdHex, null); // 404等はnullキャッシュ
+        throw e;
+    }
 }
 /**
  * main.js - Ventus ウォレット メインエントリポイント (Symbol SDK v3)
@@ -474,6 +493,71 @@ function showReceiptInfo(tag, height, receipt, cnt) {
 // Tx History 表示（v3: fetch APIベース）
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── モザイク情報インメモリキャッシュ（同一セッション内で重複API呼び出しを防ぐ）──
+// 上部の getMosaicInfoCached を使用（重複宣言なし）
+
+// ── NFT画像をmosaic-center.netから取得してcontainerに追加するヘルパー ──
+async function _fetchNftImage(mosaicIdHex, container) {
+    // XYMはスキップ
+    if (!mosaicIdHex || mosaicIdHex.toUpperCase() === '6BED913FA20223F8' || mosaicIdHex.toUpperCase() === '72C0212E67A08BCE') return;
+    if (XYM_ID && mosaicIdHex.toUpperCase() === XYM_ID.toUpperCase()) return;
+
+    // 事前存在確認: 404ならNFT試行を全てスキップ（nftdrive等の無駄な呼び出しを防ぐ）
+    try { await getMosaicInfoCached(mosaicIdHex); } catch { return; }
+
+    let found = false;
+
+    // ① Mosaic Center でサムネ確認
+    try {
+        const r = await fetch(`https://mosaic-center.net/db/api.php?mode=search&mosaicid=${mosaicIdHex}`);
+        if (r.ok) {
+            const data = await r.json();
+            if (data && data[0] && data[0][7]) {
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'text-align:center;margin-top:10px;';
+                wrap.innerHTML = `<a class="btn-style-link" href="https://mosaic-center.net/" target="_blank">Mosaic Center</a><br><br><a href="https://symbol.fyi/mosaics/${mosaicIdHex}" target="_blank" style="display:inline-block;width:200px;"><img class="mosaic_img" src="${data[0][7]}" width="200"></a>`;
+                container.appendChild(wrap);
+                found = true;
+            }
+        }
+    } catch { }
+
+    if (found) return;
+
+    // ② nft.js の各デコーダを順に試す
+    const nftArea = document.createElement('div');
+    nftArea.style.cssText = 'text-align:center;margin-top:10px;';
+    container.appendChild(nftArea);
+
+    try { await nftdrive(mosaicIdHex, nftArea); if (nftArea.children.length) return; } catch { }
+    try { await comsaNFT(mosaicIdHex, nftArea); if (nftArea.children.length) return; } catch { }
+    try { await comsaNCFT(mosaicIdHex, nftArea); if (nftArea.children.length) return; } catch { }
+    try { await ukraineNFT(mosaicIdHex, nftArea); if (nftArea.children.length) return; } catch { }
+
+    // どれもヒットしなければ nftArea を削除
+    if (!nftArea.children.length) nftArea.remove();
+}
+
+// ── メッセージHexをデコードして {type, text} を返す ──
+function _decodeMsgPayload(msgPayload) {
+    let msgType = 0, msgHex = '';
+    if (typeof msgPayload === 'object' && msgPayload) {
+        msgType = msgPayload.type ?? 0;
+        msgHex  = msgPayload.payload ?? '';
+    } else if (typeof msgPayload === 'string' && msgPayload.length >= 2) {
+        msgType = parseInt(msgPayload.slice(0, 2), 16);
+        msgHex  = msgPayload.slice(2);
+    }
+    let text = '';
+    if (msgHex) {
+        try {
+            const bytes = new Uint8Array(msgHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+            text = new TextDecoder().decode(bytes);
+        } catch { text = msgHex; }
+    }
+    return { msgType, msgHex, text };
+}
+
 async function showTransactions(activeAddress, pageNumber) {
     const dom_txInfo = document.getElementById('wallet-transactions');
     if (!dom_txInfo) return;
@@ -484,220 +568,348 @@ async function showTransactions(activeAddress, pageNumber) {
         pageSize: 15,
         pageNumber,
         order: 'desc',
-        embedded: false,
     });
 
     const res = await fetchJson(new URL(`/transactions/confirmed?${params}`, NODE));
     if (!res || !res.data) return;
 
     for (const item of res.data) {
-        const tx = item.transaction;
+        const tx   = item.transaction;
         const meta = item.meta;
-        const dom_tx = document.createElement('div');
         const txType = tx.type;
-
-        // ⛓ Transaction Info ボタン
-        const hash = meta?.hash ?? tx.hash ?? '';
-        const dom_hash = document.createElement('div');
-        dom_hash.innerHTML = `<p style="text-align: right"><button type="button" class="button-txinfo" id="${EXPLORER}/transactions/${hash}" onclick="transaction_info(this.id);"><i>⛓ Transaction Info ⛓</i></button></p>`;
-        dom_tx.appendChild(dom_hash);
+        const hash   = meta?.hash ?? tx.hash ?? '';
 
         // 日時
-        const dom_date = document.createElement('div');
-        dom_date.style.fontSize = '20px';
-        const tsMs = Number(meta?.timestamp ?? 0);
+        const tsMs  = Number(meta?.timestamp ?? 0);
         const txDate = new Date((epochAdjustment * 1000) + tsMs);
         const pad = n => String(n).padStart(2, '0');
-        const ymdhms = `${txDate.getFullYear()}-${pad(txDate.getMonth() + 1)}-${pad(txDate.getDate())} ${pad(txDate.getHours())}:${pad(txDate.getMinutes())}:${pad(txDate.getSeconds())}`;
-        dom_date.innerHTML = `<font color="#7E00FF"><p style="text-align: right">${ymdhms}</p></font>`;
-        dom_tx.appendChild(dom_date);
+        const ymdhms = `${txDate.getFullYear()}-${pad(txDate.getMonth()+1)}-${pad(txDate.getDate())} ${pad(txDate.getHours())}:${pad(txDate.getMinutes())}:${pad(txDate.getSeconds())}`;
 
-        // Tx Type
-        const dom_txType = document.createElement('div');
-        dom_txType.innerHTML = `<p style="text-align: right; line-height:100%;"><font color="#0000ff">< ${getTransactionType(txType)} ></font></p>`;
-        dom_tx.appendChild(dom_txType);
-
-        // 送信者アドレス（v3: signerPublicKeyのみ返るため公開鍵→Symbolアドレスに変換）
+        // 送信者アドレス
         const _signerRaw = tx.signerAddress ?? tx.signerPublicKey ?? '';
-        const signerAddr = (_signerRaw.length === 64)
-            ? publicKeyToAddress(_signerRaw)      // 公開鍵 64文字 → Symbolアドレス
-            : hexToAddress(_signerRaw);            // hex48文字なら変換、済みならそのまま
-        const dom_signer = document.createElement('div');
-        dom_signer.innerHTML = `<div class="copy_container"><font color="#2f4f4f">From : ${signerAddr}</font><input type="image" src="src/copy.png" class="copy_bt" height="20px" id="${signerAddr}" onclick="Onclick_Copy(this.id);" /></div>`;
-        dom_tx.appendChild(dom_signer);
+        const signerAddr = (_signerRaw.length === 64) ? publicKeyToAddress(_signerRaw) : hexToAddress(_signerRaw);
+        const isSender   = signerAddr === activeAddress;
 
-        // ── TRANSFER (16724) ──────────────────────────────────────
+        // ── カード ────────────────────────────────────────────
+        const card = document.createElement('div');
+        card.className = 'txh-card';
+
+        // 左ボーダー色
+        if      (txType === 16724) card.style.borderLeftColor = isSender ? '#e05080' : '#20c060';
+        else if (txType === 16705 || txType === 16961) card.style.borderLeftColor = '#b8860b';
+
+        // ── ヘッダー ─────────────────────────────────────────
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px;';
+
+        // Tx種別バッジ（Transfer は 送信 / 受取 に変更）
+        let badgeLabel;
+        if (txType === 16724) {
+            badgeLabel = isSender ? '📤 送信' : '📥 受取';
+        } else {
+            badgeLabel = `< ${getTransactionType(txType)} >`;
+        }
+        const badge = document.createElement('span');
+        badge.style.cssText = `
+            display:inline-block;padding:3px 10px;border-radius:20px;
+            font-size:11px;font-weight:bold;letter-spacing:.5px;
+            background:linear-gradient(135deg,rgba(110,60,220,0.15),rgba(5,183,254,0.20));
+            border:1px solid rgba(110,60,220,0.25);color:#5533aa;
+        `;
+        badge.textContent = badgeLabel;
+
+        const dateEl = document.createElement('span');
+        dateEl.style.cssText = 'font-size:13px;font-weight:700;color:#7E00FF;letter-spacing:.3px;';
+        dateEl.textContent = ymdhms;
+
+        const infoBtn = document.createElement('button');
+        infoBtn.type = 'button';
+        infoBtn.className = 'button-txinfo';
+        infoBtn.style.cssText = 'font-size:11px;padding:3px 10px;white-space:nowrap;';
+        infoBtn.id = `${EXPLORER}/transactions/${hash}`;
+        infoBtn.onclick = function() { transaction_info(this.id); };
+        infoBtn.innerHTML = '<i>⛓ Transaction Info ⛓</i>';
+
+        header.appendChild(badge);
+        header.appendChild(dateEl);
+        header.appendChild(infoBtn);
+        card.appendChild(header);
+
+        // 区切り線
+        const sep = document.createElement('div');
+        sep.style.cssText = 'border-top:1px solid rgba(144,96,224,0.15);margin:0 -2px 8px;';
+        card.appendChild(sep);
+
+        // From
+        const fromRow = document.createElement('div');
+        fromRow.className = 'copy_container';
+        fromRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;color:#2f4f4f;line-height:1.6;';
+        fromRow.innerHTML = `<span style="color:#aaa;min-width:38px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;">From</span><span style="word-break:break-all;">${signerAddr}</span><input type="image" src="src/copy.png" class="copy_bt" height="16px" id="${signerAddr}" onclick="Onclick_Copy(this.id);" style="flex-shrink:0;opacity:0.6;"/>`;
+        card.appendChild(fromRow);
+
+        // ══════════════════════════════════════════════════════
+        // TRANSFER (16724)
+        // ══════════════════════════════════════════════════════
         if (txType === 16724) {
             const recipientAddress = hexToAddress(tx.recipientAddress ?? '');
-            const dom_recipient = document.createElement('div');
-            dom_recipient.innerHTML = `<div class="copy_container"><font color="#2f4f4f">To\u3000:   ${recipientAddress}</font><input type="image" src="src/copy.png" class="copy_bt" height="20px" id="${recipientAddress}" onclick="Onclick_Copy(this.id);" /></div>`;
-            dom_tx.appendChild(dom_recipient);
+            const toRow = document.createElement('div');
+            toRow.className = 'copy_container';
+            toRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px;color:#2f4f4f;line-height:1.6;';
+            toRow.innerHTML = `<span style="color:#aaa;min-width:38px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;">To</span><span style="word-break:break-all;">${recipientAddress}</span><input type="image" src="src/copy.png" class="copy_bt" height="16px" id="${recipientAddress}" onclick="Onclick_Copy(this.id);" style="flex-shrink:0;opacity:0.6;"/>`;
+            card.appendChild(toRow);
 
-            const isSender = signerAddr === activeAddress;
             const mosaics = tx.mosaics ?? [];
-
             if (mosaics.length === 0) {
                 const d = document.createElement('div');
-                d.innerHTML = isSender
-                    ? `<font color="#FF0000">Mosaic :\u3000No mosaic</font>`
-                    : `<font color="#008000">Mosaic :\u3000No mosaic</font>`;
-                dom_tx.appendChild(d);
+                d.style.cssText = `font-size:13px;font-weight:bold;color:${isSender ? '#e05080' : '#20c060'};margin-bottom:4px;`;
+                d.textContent = 'No mosaic';
+                card.appendChild(d);
             }
-
             for (const m of mosaics) {
                 const mosaicIdHex = m.id;
-                const dom_mosaic = document.createElement('div');
-                const dom_amount = document.createElement('div');
-                const dom_NFT = document.createElement('div');
-                const dom_mosaic_img = document.createElement('div');
+                const mosaicRow = document.createElement('div');
+                mosaicRow.style.cssText = 'margin-bottom:6px;margin-top:4px;';
+                const amountRow = document.createElement('div');
+                amountRow.style.cssText = 'margin-bottom:8px;';
+                card.appendChild(mosaicRow);
+                card.appendChild(amountRow);
 
                 (async () => {
                     try {
                         const moInfo = await getMosaicInfo(mosaicIdHex);
-                        const div = moInfo.divisibility;
-                        const dispAmt = (Number(m.amount) / 10 ** div).toLocaleString(undefined, { maximumFractionDigits: 6 });
-                        const mosaicNamesArr = await getMosaicsNames([mosaicIdHex]).catch(() => null);
-                        const names = mosaicNamesArr?.[0]?.names ?? [];
-                        const nameStr = names.length > 0 ? names[0] : mosaicIdHex;
-
-                        if (isSender) {
-                            dom_mosaic.innerHTML = `<font color="#FF0000">Mosaic :\u3000<big><strong>${nameStr}</strong></big></font>`;
-                            dom_amount.innerHTML = `<font color="#FF0000" size="+1">\uD83D\uDC81\u200D\u2640\uFE0F\u27A1\uFE0F\uD83D\uDCB0 :\u3000<i><big><strong> ${dispAmt} </strong></big></i></font>`;
-                        } else {
-                            dom_mosaic.innerHTML = `<font color="#008000">Mosaic :\u3000<big><strong>${nameStr}</strong></big></font>`;
-                            dom_amount.innerHTML = `<font color="#008000" size="+1">\uD83D\uDCB0\u27A1\uFE0F\uD83D\uDE0A :\u3000<i><big><strong> ${dispAmt} </strong></big></i></font>`;
-                        }
+                        const dispAmt = (Number(m.amount) / 10 ** moInfo.divisibility).toLocaleString(undefined, { maximumFractionDigits: 6 });
+                        const names = (await getMosaicsNames([mosaicIdHex]).catch(() => null))?.[0]?.names ?? [];
+                        const nameStr = names.length > 0 ? (typeof names[0] === 'object' ? names[0].name : names[0]) : mosaicIdHex;
+                        const color = isSender ? '#e05080' : '#20c060';
+                        const arrow = isSender ? '💸 ➡️' : '💰 ➡️';
+                        mosaicRow.innerHTML = `<span style="color:${color};font-size:13px;font-weight:bold;">Mosaic : <big><strong>${nameStr}</strong></big></span>`;
+                        amountRow.innerHTML = `<span style="color:${color};font-size:15px;">${arrow} <i><big><strong>${dispAmt}</strong></big></i></span>`;
+                        await _fetchNftImage(mosaicIdHex, card);
                     } catch { }
                 })();
 
-                nftdrive(mosaicIdHex, dom_NFT);
-                comsaNFT(mosaicIdHex, dom_NFT);
-                comsaNCFT(mosaicIdHex, dom_NFT);
-
-                if (mosaicIdHex !== '6BED913FA20223F8' && mosaicIdHex !== '72C0212E67A08BCE') {
-                    fetch(`https://mosaic-center.net/db/api.php?mode=search&mosaicid=${mosaicIdHex}`)
-                        .then(r => r.ok ? r.json() : null)
-                        .then(data => {
-                            if (data) {
-                                dom_mosaic_img.innerHTML = `<br><div style="text-align:center;"><a class="btn-style-link" href="https://mosaic-center.net/" target="_blank">Mosaic Center</a><br><br><a href="https://symbol.fyi/mosaics/${mosaicIdHex}" target="_blank" style="display:inline-block;width:200px;"><img class="mosaic_img" src="${data[0][7]}" width="200"></a></div><br>`;
-                            }
-                        }).catch(() => { });
-                }
-
-                dom_tx.appendChild(dom_mosaic);
-                dom_tx.appendChild(dom_amount);
-                dom_tx.appendChild(dom_NFT);
-                dom_tx.appendChild(dom_mosaic_img);
+                // レート制限対策: 50ms待機
                 await new Promise(r => setTimeout(r, 50));
             }
 
             // メッセージ
-            // v3 REST API: tx.message は hex 文字列 "01xxxx..."(暗号化) or "00xxxx..."(平文)
-            // または旧スキーマ: { type: 0|1, payload: "hex..." }
-            const msgPayload = tx.message ?? '';
-            let msgType, msgHex;
-            if (typeof msgPayload === 'object') {
-                msgType = msgPayload.type ?? 0;
-                msgHex = msgPayload.payload ?? '';
-            } else if (typeof msgPayload === 'string' && msgPayload.length >= 2) {
-                msgType = parseInt(msgPayload.slice(0, 2), 16); // 先頭1バイト = タイプ
-                msgHex = msgPayload.slice(2);                  // 残り = 本文
-            } else {
-                msgType = 0;
-                msgHex = '';
-            }
-
-            const dom_message = document.createElement('div');
-            dom_message.style.fontFamily = 'Hiragino Maru Gothic ProN W4';
-
+            const { msgType, msgHex, text } = _decodeMsgPayload(tx.message ?? '');
             if (msgType === 1) {
-                // 暗号化メッセージ
                 const senderPubKey = tx.signerPublicKey ?? tx.signerAddress ?? '';
-                const dom_enc = document.createElement('div');
-                dom_enc.innerHTML = `<font color="#ff00ff"><strong><br>暗号化メッセージ &nbsp;< Encrypted Message ></strong></font>`;
-                dom_tx.appendChild(dom_enc);
-
-                // 復号ボタン（v2 の Onclick_Decryption と同等）
-                const dom_dec_btn = document.createElement('button');
-                dom_dec_btn.type = 'button';
-                dom_dec_btn.textContent = '🔓 復号する';
-                dom_dec_btn.style.cssText = 'margin:4px 0; padding:4px 12px; cursor:pointer;';
-                dom_dec_btn.onclick = () => Onclick_Decryption(senderPubKey, msgHex);
-                dom_tx.appendChild(dom_dec_btn);
-
-                dom_message.innerHTML = `<font color="#4169e1">[暗号化メッセージ]</font>`;
-            } else if (msgHex) {
-                // 平文メッセージ（hex → UTF-8 デコード）
-                let displayMsg = msgHex;
-                try {
-                    const bytes = new Uint8Array(msgHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
-                    displayMsg = new TextDecoder().decode(bytes);
-                } catch { }
-                dom_message.innerHTML = `<font color="#4169e1"><br><br>< Message ><br>${displayMsg}</font>`;
+                card.insertAdjacentHTML('beforeend', `<div style="color:#ff00ff;font-weight:bold;margin-top:10px;padding:6px 0;">🔒 暗号化メッセージ &lt;Encrypted Message&gt;</div>`);
+                const decBtn = document.createElement('button');
+                decBtn.type = 'button'; decBtn.textContent = '🔓 復号する';
+                decBtn.style.cssText = 'margin:4px 0 8px;padding:6px 14px;cursor:pointer;border-radius:8px;';
+                decBtn.onclick = () => Onclick_Decryption(senderPubKey, msgHex);
+                card.appendChild(decBtn);
+            } else if (text) {
+                card.insertAdjacentHTML('beforeend', `<div style="color:#4169e1;font-family:'Hiragino Maru Gothic ProN W4';margin-top:10px;padding:6px 0;font-size:13px;line-height:1.6;">💬 ${text}</div>`);
             }
-            dom_tx.appendChild(dom_message);
-            dom_tx.appendChild(document.createElement('hr'));
         }
 
-        // ── NAMESPACE_REGISTRATION (16717) ──────────────────────
+        // ══════════════════════════════════════════════════════
+        // AGGREGATE (16705 = Complete / 16961 = Bonded)
+        // ══════════════════════════════════════════════════════
+        if (txType === 16705 || txType === 16961) {
+            // v3 REST API: ハッシュで個別取得して正確な内部Tx一覧を得る
+            let innerTxs = tx.transactions ?? tx.innerTransactions ?? [];
+
+            // 常にハッシュで個別Txを取得し直す（embedded queryは件数が不正確なため）
+            if (hash) {
+                try {
+                    const fullTx = await fetchJson(new URL(`/transactions/confirmed/${hash}`, NODE));
+                    const txns = fullTx?.transaction?.transactions ?? fullTx?.transactions ?? [];
+                    if (txns.length > 0) {
+                        innerTxs = txns;
+                    }
+                } catch(e) { console.warn('[Aggregate] full-tx fetch error:', e); }
+            }
+
+            const aggLabel = txType === 16961 ? 'AGGREGATE_BONDED' : 'AGGREGATE_COMPLETE';
+
+            // ── カード外に出すコンテンツを先に収集 ──────────────
+            const nftMosaicIds = new Set();
+            const messages = new Set();
+
+            for (const inner of innerTxs) {
+                const itx = inner.transaction ?? inner;
+                for (const m of (itx.mosaics ?? [])) {
+                    if (m.id && m.id !== '6BED913FA20223F8' && m.id !== '72C0212E67A08BCE') {
+                        nftMosaicIds.add(m.id);
+                    }
+                }
+                const { msgType, text } = _decodeMsgPayload(itx.message ?? '');
+                if (msgType !== 1 && text) messages.add(text);
+            }
+
+            // ── アコーディオンボタン ─────────────────────────
+            const accBtn = document.createElement('button');
+            accBtn.type = 'button';
+            accBtn.className = 'txh-accordion-btn';
+            const displayTxs = innerTxs.slice(0, 100); // 表示は最大100件
+            accBtn.innerHTML = `<span class="txh-acc-arrow">▶</span>&nbsp;${aggLabel}&nbsp;&nbsp;<span style="opacity:0.7;font-size:11px;">(${innerTxs.length} inner txs)</span>`;
+
+            // ── 内部Txリスト（初期は非表示） ────────────────────
+            const innerList = document.createElement('div');
+            innerList.className = 'txh-inner-list';
+            innerList.style.display = 'none'; // 必ず閉じた状態で開始
+
+            // アコーディオントグル
+            accBtn.addEventListener('click', () => {
+                const isOpen = accBtn.classList.toggle('open');
+                innerList.style.display = isOpen ? 'block' : 'none';
+            });
+
+            // アドレスを短縮表示するヘルパー
+            const _shortAddr = addr => addr.length > 16
+                ? `${addr.slice(0, 8)}…${addr.slice(-6)}`
+                : addr;
+
+            // 内部Txを描画（データに存在するTxを全て表示、最大100件）
+            for (const inner of displayTxs) {
+                const itx     = inner.transaction ?? inner;
+                const itxType = itx.type;
+
+                const item = document.createElement('div');
+                item.className = 'txh-inner-item';
+
+                const itxSigRaw = itx.signerAddress ?? itx.signerPublicKey ?? '';
+                const itxSigner = (itxSigRaw.length === 64) ? publicKeyToAddress(itxSigRaw) : hexToAddress(itxSigRaw);
+                const itxIsSend = itxSigner === activeAddress;
+                const itxTo     = itxType === 16724 ? hexToAddress(itx.recipientAddress ?? '') : '';
+                const itxIsRecv = itxTo === activeAddress;
+
+                // ── Tx種別バッジ（3パターン） ──────────────────
+                let typeBadge;
+                if (itxType === 16724) {
+                    if (itxIsSend) {
+                        // 自分 → 他人
+                        typeBadge = `<span style="background:#e05080;color:#fff;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:bold;">📤 送信</span>`;
+                    } else if (itxIsRecv) {
+                        // 他人 → 自分
+                        typeBadge = `<span style="background:#20c060;color:#fff;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:bold;">📥 受取</span>`;
+                    } else {
+                        // 他人 → 他人（送信元アドレスをバッジ右に表示）
+                        typeBadge = `<span style="background:#888;color:#fff;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:bold;">↔️ 他者送信</span> <span style="font-size:11px;color:#777;font-family:monospace;">${_shortAddr(itxSigner)}</span>`;
+                    }
+                } else {
+                    // その他Tx: 種別名のみ
+                    typeBadge = `<span style="background:rgba(122,85,10,0.12);color:#7a550a;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:bold;">${getTransactionType(itxType)}</span>`;
+                }
+
+                let html = `<div style="margin-bottom:4px;">${typeBadge}</div>`;
+
+                // TRANSFER の場合のみ To + モザイクを表示（Fromは冗長なので省略）
+                if (itxType === 16724) {
+                    html += `<div style="font-size:11px;color:#888;margin-bottom:4px;">→ <span style="color:#444;font-family:monospace;font-size:11px;">${_shortAddr(itxTo)}</span></div>`;
+                    for (const m of (itx.mosaics ?? [])) {
+                        const color = itxIsSend ? '#e05080' : (itxIsRecv ? '#20c060' : '#888');
+                        html += `<div data-mosaic="${m.id}" data-amount="${m.amount}" style="display:inline-block;background:rgba(0,0,0,0.06);border-radius:8px;padding:3px 10px;font-size:12px;color:${color};font-weight:bold;margin-top:2px;">⏳ 取得中…</div>`;
+                    }
+
+                    // 暗号化メッセージ
+                    const { msgType: itxMsgType } = _decodeMsgPayload(itx.message ?? '');
+                    if (itxMsgType === 1) {
+                        html += `<div style="font-size:11px;color:#ff00ff;margin-top:4px;">🔒 暗号化メッセージ</div>`;
+                    }
+                }
+
+                item.innerHTML = html;
+                innerList.appendChild(item);
+
+                // TRANSFER のみモザイク名を非同期で差し替え（キャッシュ利用で重複API呼び出し防止）
+                if (itxType === 16724) {
+                    for (const m of (itx.mosaics ?? [])) {
+                        (async (mId, amt, isSend, el) => {
+                            const chip = el.querySelector(`[data-mosaic="${mId}"]`);
+                            try {
+                                const { moInfo, names } = await getMosaicInfoCached(mId);
+                                const dispAmt = (Number(amt) / 10 ** moInfo.divisibility).toLocaleString(undefined, { maximumFractionDigits: 6 });
+                                const nm = names.length > 0 ? (typeof names[0] === 'object' ? names[0].name : names[0]) : mId;
+                                const color = isSend ? '#e05080' : '#20c060';
+                                if (chip) chip.innerHTML = `<span style="color:${color};"><strong>${nm}</strong>&nbsp;<span style="font-weight:normal;">${dispAmt}</span></span>`;
+                            } catch {
+                                // 404等: モザイクIDをそのまま表示 + 数量
+                                const rawAmt = chip?.dataset?.amount ?? amt;
+                                if (chip) chip.innerHTML = `<span style="color:#999;font-size:11px;">${mId} (${rawAmt})</span>`;
+                            }
+                        })(m.id, m.amount, itxIsSend, item);
+                    }
+                }
+            }
+
+
+            card.appendChild(accBtn);
+            card.appendChild(innerList);
+
+            // アコーディオン外：重複排除NFT画像
+            if (nftMosaicIds.size > 0) {
+                const nftArea = document.createElement('div');
+                nftArea.className = 'txh-nft-center';
+                card.appendChild(nftArea);
+                for (const mid of nftMosaicIds) {
+                    await _fetchNftImage(mid, nftArea);
+                    // NFT取得間もレート制限配慮
+                    await new Promise(r => setTimeout(r, 50));
+                }
+            }
+
+            // アコーディオン外：重複排除メッセージ
+            for (const msg of messages) {
+                card.insertAdjacentHTML('beforeend', `<div style="color:#4169e1;font-family:'Hiragino Maru Gothic ProN W4';margin-top:10px;padding:6px 0;font-size:13px;line-height:1.6;">💬 ${msg}</div>`);
+            }
+        }
+
+
+        // ══════════════════════════════════════════════════════
+        // NAMESPACE_REGISTRATION (16717)
+        // ══════════════════════════════════════════════════════
         if (txType === 16717) {
-            const dom_ns = document.createElement('div');
-            const label = tx.registrationType === 0 ? 'root Namespace \u767B\u9332' : 'sub Namespace \u767B\u9332';
-            dom_ns.innerHTML = `<font color="#008b8b">${label} :\u3000<big><strong>${tx.name}</strong></big></font>`;
-            dom_tx.appendChild(dom_ns);
-            dom_tx.appendChild(document.createElement('hr'));
+            const label = tx.registrationType === 0 ? 'root Namespace 登録' : 'sub Namespace 登録';
+            card.insertAdjacentHTML('beforeend', `<div style="font-size:13px;color:#008b8b;margin-top:4px;">${label} : <big><strong>${tx.name}</strong></big></div>`);
         }
 
-        // ── MOSAIC_SUPPLY_REVOCATION (17229) ──────────────────────
+        // ══════════════════════════════════════════════════════
+        // MOSAIC_SUPPLY_REVOCATION (17229)
+        // ══════════════════════════════════════════════════════
         if (txType === 17229) {
-            const mosaicIdHex = tx.mosaicId;
-            const dom_mosaic = document.createElement('div');
-            const dom_amount_el = document.createElement('div');
+            const mid = tx.mosaicId;
+            const dm = document.createElement('div'), da = document.createElement('div');
+            card.appendChild(document.createElement('div')).innerHTML =
+                `<div class="copy_container"><font color="#2f4f4f">♻️回収先♻️ : ${tx.sourceAddress ?? ''}</font></div>`;
+            card.appendChild(dm); card.appendChild(da);
             (async () => {
                 try {
-                    const moInfo = await getMosaicInfo(mosaicIdHex);
-                    const div = moInfo.divisibility;
-                    const dispAmt = (Number(tx.amount) / 10 ** div).toLocaleString(undefined, { maximumFractionDigits: 6 });
-                    dom_mosaic.innerHTML = `<font color="#3399FF">Mosaic \u56DE\u53CE :\u3000<big><strong>${mosaicIdHex}</strong></big></font>`;
-                    dom_amount_el.innerHTML = `<font color="#3399FF" size="+1">\uD83D\uDCB0\u27A1\uFE0F\uD83D\uDE0A :\u3000<i><big><strong> ${dispAmt} </strong></big></i></font>`;
+                    const moInfo = await getMosaicInfo(mid);
+                    const dispAmt = (Number(tx.amount) / 10 ** moInfo.divisibility).toLocaleString(undefined, { maximumFractionDigits: 6 });
+                    dm.innerHTML = `<font color="#3399FF">Mosaic 回収 : <big><strong>${mid}</strong></big></font>`;
+                    da.innerHTML = `<font color="#3399FF" size="+1">💰➡️ <i><big><strong>${dispAmt}</strong></big></i></font>`;
                 } catch { }
             })();
-            const dom_src = document.createElement('div');
-            dom_src.innerHTML = `<div class="copy_container"><font color="#2f4f4f">\u267B\uFE0F\u56DE\u53CE\u5148\u267B\uFE0F :\u3000${tx.sourceAddress ?? ''}</font></div>`;
-            dom_tx.appendChild(dom_src);
-            dom_tx.appendChild(dom_mosaic);
-            dom_tx.appendChild(dom_amount_el);
-            dom_tx.appendChild(document.createElement('hr'));
         }
 
-        // ── MOSAIC_SUPPLY_CHANGE (16973) ──────────────────────────
+        // ══════════════════════════════════════════════════════
+        // MOSAIC_SUPPLY_CHANGE (16973)
+        // ══════════════════════════════════════════════════════
         if (txType === 16973) {
-            const dom_mosaic = document.createElement('div');
-            const label = tx.action === 0 ? '\u6E1B\u5C11\u3000\u2B07\uFE0F' : '\u5897\u52A0\u3000\u2B06\uFE0F';
-            dom_mosaic.innerHTML = `<font color="#3399FF">Mosaic :\u3000${tx.mosaicId}<br><big><strong> ${label}\u3000${Number(tx.delta)}</strong></big></font>`;
-            dom_tx.appendChild(dom_mosaic);
-            dom_tx.appendChild(document.createElement('hr'));
+            const label = tx.action === 0 ? '減少 ⬇️' : '増加 ⬆️';
+            card.insertAdjacentHTML('beforeend', `<div style="color:#3399FF;">Mosaic : ${tx.mosaicId}<br><big><strong>${label} ${Number(tx.delta)}</strong></big></div>`);
         }
 
-        // ── AGGREGATE (16705 / 16961) ──────────────────────────────
-        if (txType === 16705 || txType === 16961) {
-            const dom_agg = document.createElement('div');
-            dom_agg.innerHTML = `<font color="#b8860b">Aggregate Tx (${(tx.transactions ?? []).length} inner txs)</font>`;
-            dom_tx.appendChild(dom_agg);
-            dom_tx.appendChild(document.createElement('hr'));
-        }
-
-        // ── HASH_LOCK (16712) ──────────────────────────────────────
+        // ══════════════════════════════════════════════════════
+        // HASH_LOCK (16712)
+        // ══════════════════════════════════════════════════════
         if (txType === 16712) {
-            const dom_hl = document.createElement('div');
-            dom_hl.innerHTML = `<font color="#888">Hash Lock</font>`;
-            dom_tx.appendChild(dom_hl);
-            dom_tx.appendChild(document.createElement('hr'));
+            card.insertAdjacentHTML('beforeend', `<div style="font-size:13px;color:#888;margin-top:4px;">🔒 Hash Lock</div>`);
         }
 
-        dom_txInfo.appendChild(dom_tx);
+        dom_txInfo.appendChild(card);
     }
 }
+
+
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // メイン初期化
@@ -1496,40 +1708,56 @@ async function handleSSS_multisig(activeAddress) {
     }
 
     try {
-        const moInfo = await getMosaicInfoCached(mosaicIdHex);
+        const { moInfo } = await getMosaicInfoCached(mosaicIdHex);
         const amount = BigInt(Math.round(Number(amountRaw) * Math.pow(10, moInfo.divisibility)));
 
-        // マルチシグから送信: inner tx の signerPublicKey はマルチシグアカウント自身の公開鍵が必要
+        // マルチシグアカウントの公開鍵と minApproval を取得
         let msigPubKey = signerPubKey;
+        let minApproval = 2; // デフォルトは Bonded 扱い（安全側）
         try {
+            // 公開鍵取得
             const acctRes = await fetch(new URL('/accounts/' + multisigAddr, NODE));
             const acctJson = await acctRes.json();
             const fetchedKey = acctJson.account?.publicKey ?? '';
             if (fetchedKey && !/^0+$/.test(fetchedKey)) msigPubKey = fetchedKey;
+            // minApproval は /account/{addr}/multisig エンドポイントで取得
+            const msigRes = await fetch(new URL('/account/' + multisigAddr + '/multisig', NODE));
+            const msigJson = await msigRes.json();
+            minApproval = msigJson.multisig?.minApproval ?? minApproval;
+            console.log('[handleSSS_multisig] minApproval:', minApproval);
         } catch (e) {
-            console.warn('[handleSSS_multisig] msig pubkey fetch failed', e);
+            console.warn('[handleSSS_multisig] account fetch failed', e);
         }
+
         const innerTx = buildEmbeddedTransferTx(toAddress, mosaicIdHex, amount, message, msigPubKey);
-        const aggregateBonded = buildAggregateBondedTx([innerTx], signerPubKey, 1, 100);
 
-        const feeXym = Number(aggregateBonded.fee.value) / 1_000_000;
-        const feeEl = document.getElementById('fee_multisig');
-        if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
+        if (minApproval <= 1) {
+            // ── 1-of-N: Aggregate Complete（HashLock不要） ──────────
+            const aggregateComplete = buildAggregateCompleteTx([innerTx], signerPubKey, 1, 100);
+            const feeXym = Number(aggregateComplete.fee.value) / 1_000_000;
+            const feeEl = document.getElementById('fee_multisig');
+            if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
 
-        // 1. まず Hash Lock Tx をアナウンス
-        const bondedHash = sdkCore.utils.uint8ToHex(
-            facade.hashTransaction(aggregateBonded).bytes
-        );
-        const hashLockTx = buildHashLockTx(bondedHash, signerPubKey, XYM_ID);
-        await signAndAnnounce(hashLockTx);
+            await signAndAnnounce(aggregateComplete);
+            Swal.fire({ title: 'マルチシグ転送を送信しました！', icon: 'success' });
 
-        // 2. WebSocket で confirmed を待って Bonded をアナウンス
-        // （簡易版: Hash Lock 確認後に手動で Bonded を送信するため、少し待機）
-        Swal.fire({ title: 'Hash Lock 送信済み', text: '数秒後に Aggregate Bonded を送信します...', icon: 'info', timer: 4000, showConfirmButton: false });
-        await new Promise(r => setTimeout(r, 4500));
+        } else {
+            // ── 2-of-N以上: Aggregate Bonded（HashLock必要） ──────────
+            const aggregateBonded = buildAggregateBondedTx([innerTx], signerPubKey, 1, 100);
+            const feeXym = Number(aggregateBonded.fee.value) / 1_000_000;
+            const feeEl = document.getElementById('fee_multisig');
+            if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM（+ HashLock 10 XYM）</p>`;
 
-        await signAndAnnounce(aggregateBonded, true);
-        Swal.fire({ title: 'マルチシグ転送を送信しました！', icon: 'success' });
+            const bondedHash = sdkCore.utils.uint8ToHex(facade.hashTransaction(aggregateBonded).bytes);
+            const hashLockTx = buildHashLockTx(bondedHash, signerPubKey, XYM_ID);
+            await signAndAnnounce(hashLockTx);
+
+            Swal.fire({ title: 'Hash Lock 送信済み', text: '数秒後に Aggregate Bonded を送信します...', icon: 'info', timer: 4000, showConfirmButton: false });
+            await new Promise(r => setTimeout(r, 4500));
+
+            await signAndAnnounce(aggregateBonded, true);
+            Swal.fire({ title: 'マルチシグ転送を送信しました！', icon: 'success' });
+        }
     } catch (e) {
         console.error('[handleSSS_multisig]', e);
         Swal.fire({ title: 'マルチシグ転送失敗', text: e.message, icon: 'error' });
@@ -1666,8 +1894,31 @@ export async function loadMsigSendModal() {
     addrContainer.appendChild(addrHint);
     sel.addEventListener('change', () => { addrHint.textContent = sel.value; });
 
+    // minApproval に応じてUIを切り替えるヘルパー
+    async function _updateMsigSendUI(addr) {
+        try {
+            const res = await fetch(new URL('/account/' + addr + '/multisig', NODE));
+            const json = await res.json();
+            const minApp = json.multisig?.minApproval ?? 2;
+            const feeNotice = document.querySelector('.msig-send-fee-notice');
+            const subtitle  = document.querySelector('.msig-send-subtitle');
+            if (minApp <= 1) {
+                // 1-of-N: Complete → HashLock 不要
+                if (feeNotice) feeNotice.style.display = 'none';
+                if (subtitle)  subtitle.textContent = 'AggregateComplete トランザクション';
+            } else {
+                // 2-of-N以上: Bonded → HashLock 必要
+                if (feeNotice) feeNotice.style.display = '';
+                if (subtitle)  subtitle.textContent = 'AggregateBonded トランザクション';
+            }
+        } catch { /* 取得失敗時はデフォルト表示のまま */ }
+    }
+
+    await _updateMsigSendUI(sel.value);
+
     await _loadMsigSendMosaics(sel.value, mosaicContainer);
     sel.addEventListener('change', async () => {
+        await _updateMsigSendUI(sel.value);
         await _loadMsigSendMosaics(sel.value, mosaicContainer);
     });
 }
@@ -2023,9 +2274,121 @@ function select_Page() {
 }
 
 // モザイク一覧ページ切り替え
-function select_Page_mosa1() {
+async function select_Page_mosa1() {
+    const pageNum = Number(document.getElementById('page_num_mosa1')?.value ?? 1);
     const addr = window.SSS?.activeAddress;
-    if (addr) Onclick_mosaic(addr);
+    if (!addr) return;
+
+    const msTbl = document.getElementById('ms_table');
+    if (msTbl) msTbl.innerHTML = '<span style="color:#aaa;font-size:13px;">読み込み中...</span>';
+
+    try {
+        const chainInfo = await getChainInfo();
+        const currentHeight = Number(chainInfo.height);
+        const currentBlock = await getBlockByHeight(currentHeight);
+        const currentTs = Number(currentBlock.timestamp);
+
+        // 自分が発行（所有者）のモザイクを取得
+        const data = await fetchJson(new URL(
+            `/mosaics?ownerAddress=${addr}&pageNumber=${pageNum}&pageSize=50&order=desc`, NODE
+        ));
+        const mosaics = data.data ?? [];
+        if (!msTbl) return;
+
+        // モザイクIDリスト → 名前解決 (/namespaces/mosaic/names を使用)
+        const mosaicIds = mosaics.map(m => (m.mosaic ?? m).id ?? '').filter(Boolean);
+        let nameMap = {}; // mosaicId.upper -> nsName
+        if (mosaicIds.length > 0) {
+            try {
+                const namesData = await getMosaicsNames(mosaicIds);
+                for (const n of (namesData ?? [])) {
+                    const firstName = (n.names ?? [])[0] ?? '';
+                    if (firstName) nameMap[(n.mosaicId ?? '').toUpperCase()] = firstName;
+                }
+            } catch {}
+        }
+
+        // テーブル構築
+        const tbl = document.createElement('table');
+        tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:11px;';
+        const tblBody = document.createElement('tbody');
+
+        const headers = ['モザイクID','ネームスペース名','供給量','残高','有効期限','ステータス','可分性','制限可','供給量可変','転送可','回収可'];
+        const hdr = document.createElement('tr');
+        headers.forEach(h => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            th.style.cssText = 'background:#0a5;color:#fff;padding:5px 6px;text-align:center;white-space:nowrap;';
+            hdr.appendChild(th);
+        });
+        tblBody.appendChild(hdr);
+
+        mosaics.forEach((mEntry, idx) => {
+            const m = mEntry.mosaic ?? mEntry;
+            const mId = (m.id ?? '').toUpperCase();
+            const nsName = nameMap[mId] || 'N/A';
+            const supply = Number(BigInt(m.supply ?? 0));
+            const div = m.divisibility ?? 0;
+            const supplyDisp = (supply / Math.pow(10, div)).toLocaleString();
+
+            // アカウント残高は別途取得が必要なため supply で代用
+            const balanceDisp = supplyDisp;
+
+            // 有効期限
+            const dur = Number(m.duration ?? 0);
+            const startH = Number(m.startHeight ?? 0);
+            let expiryStr = '--- 無期限 ---';
+            let isExpired = false;
+            if (dur > 0) {
+                const endH = startH + dur;
+                const remainBlocks = endH - currentHeight;
+                isExpired = remainBlocks < 0;
+                const expiryMs = (epochAdjustment * 1000) + (currentTs + remainBlocks * 30000);
+                const d = new Date(expiryMs);
+                expiryStr = `${String(d.getFullYear()).slice(2)}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+            }
+            const statusDot = isExpired ? '🔴' : '🟢';
+            const dot = v => v ? '🟢' : '❌';
+
+            const flags = m.flags ?? 0;
+            // Symbol mosaic flags: bit0=supplyMutable, bit1=transferable, bit2=restrictable, bit3=revokable
+            const supplyMutable  = !!(flags & 1);
+            const transferable   = !!(flags & 2);
+            const restrictable   = !!(flags & 4);
+            const revokable      = !!(flags & 8);
+
+            const row = document.createElement('tr');
+            row.style.cssText = idx % 2 === 0 ? 'background:#e8f8f0;' : 'background:#fff;';
+            const cells = [
+                { text: mId, mono: true, small: true },
+                { text: nsName },
+                { text: supplyDisp, right: true },
+                { text: balanceDisp, right: true },
+                { text: expiryStr, center: true },
+                { html: statusDot, center: true },
+                { text: String(div), center: true },
+                { html: dot(restrictable), center: true },
+                { html: dot(supplyMutable), center: true },
+                { html: dot(transferable), center: true },
+                { html: dot(revokable), center: true },
+            ];
+            cells.forEach(({ text, html, mono, small, center, right }) => {
+                const td = document.createElement('td');
+                td.style.cssText = `padding:4px 6px;border-bottom:1px solid #cde;text-align:${right ? 'right' : center ? 'center' : 'left'};${mono ? 'font-family:monospace;' : ''}${small ? 'font-size:10px;word-break:break-all;' : ''}`;
+                if (html) td.textContent = html;
+                else td.textContent = text ?? '';
+                row.appendChild(td);
+            });
+            tblBody.appendChild(row);
+        });
+
+        tbl.appendChild(tblBody);
+        msTbl.innerHTML = '';
+        msTbl.appendChild(tbl);
+    } catch (e) {
+        console.error('[select_Page_mosa1]', e);
+        if (msTbl) msTbl.innerHTML = `<span style="color:red;">エラー: ${e.message}</span>`;
+    }
 }
 
 // ネームスペース一覧ページ切り替え (v3版)
@@ -2035,7 +2398,7 @@ async function select_Page_namespace() {
     if (!addr) return;
 
     const nsTbl = document.getElementById('ns_table');
-    if (nsTbl) nsTbl.innerHTML = '';
+    if (nsTbl) nsTbl.innerHTML = '<span style="color:#aaa;font-size:13px;">読み込み中...</span>';
     const nsSel = document.querySelector('.Namespace_select');
     if (nsSel) nsSel.innerHTML = '';
 
@@ -2051,73 +2414,114 @@ async function select_Page_namespace() {
         const namespaces = data.data ?? [];
 
         if (!nsTbl) return;
-        const tbl = document.createElement('table');
-        tbl.setAttribute('border', '1');
-        const tblBody = document.createElement('tbody');
 
-        // ヘッダー行
-        const hdr = document.createElement('tr');
-        ['No', 'ネームスペース', '有効期限', '種別'].forEach(h => {
-            const th = document.createElement('td');
-            th.textContent = h;
-            th.style.textAlign = 'center';
-            hdr.appendChild(th);
-        });
-        tblBody.appendChild(hdr);
-
-        const nsIds = namespaces.map(ns => ns.namespace?.level0 ?? ns.id ?? '');
+        // ── 全 NS の名前解決 ──
+        const allNsIds = [];
+        for (const nsEntry of namespaces) {
+            const ns = nsEntry.namespace ?? nsEntry;
+            for (const lv of ['level0','level1','level2']) {
+                const id = ns[lv];
+                if (id) allNsIds.push(id);
+            }
+        }
         let nsNameMap = {};
-        if (nsIds.length > 0) {
+        if (allNsIds.length > 0) {
             try {
-                const names = await fetchJson(new URL('/namespaces/names', NODE), 'POST', { namespaceIds: nsIds.filter(Boolean) });
-                for (const n of (names.namespaceNames ?? [])) {
-                    nsNameMap[n.id?.toUpperCase()] = n.name;
+                const names = await fetchJson(new URL('/namespaces/names', NODE), 'POST', { namespaceIds: [...new Set(allNsIds)] });
+                // Symbol REST v3 は配列直接 or {namespaceNames:[...]} の両方ありうる
+                const nameList = Array.isArray(names) ? names : (names.namespaceNames ?? []);
+                for (const n of nameList) {
+                    nsNameMap[(n.id ?? '').toUpperCase()] = n.name;
                 }
             } catch {}
         }
+
+        // ── テーブル構築 ──
+        const tbl = document.createElement('table');
+        tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+        const tblBody = document.createElement('tbody');
+
+        // ヘッダー
+        const hdr = document.createElement('tr');
+        ['ネームスペース名','ネームスペースID','更新期限','ステータス','タイプ','🔗リンク🔗'].forEach(h => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            th.style.cssText = 'background:#0a5;color:#fff;padding:6px 8px;text-align:center;white-space:nowrap;';
+            hdr.appendChild(th);
+        });
+        tblBody.appendChild(hdr);
 
         namespaces.forEach((nsEntry, idx) => {
             const ns = nsEntry.namespace ?? nsEntry;
             const endH = Number(ns.endHeight ?? 0);
             const remainBlocks = endH - currentHeight;
-            let expiryStr = '';
-            if (endH === 0xFFFFFFFFFFFFFFFF || endH > 9_999_999) {
-                expiryStr = '無期限 ∞';
-            } else {
-                const expiryTs = (currentTs + remainBlocks * 30000);
-                const d = new Date((epochAdjustment + expiryTs / 1000) * 1000);
-                expiryStr = d.toLocaleString('ja-JP');
+            // 更新期限
+            let expiryStr = '----------------';
+            if (endH !== 0 && endH < 99_999_999) {
+                const expiryMs = (epochAdjustment * 1000) + (currentTs + remainBlocks * 30000);
+                const d = new Date(expiryMs);
+                expiryStr = `${String(d.getFullYear()).slice(2)}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
             }
-            const nsId = (ns.level0 ?? ns.id ?? '');
-            const nsName = nsNameMap[nsId.toUpperCase?.()] ?? nsId;
-            const isRoot = (ns.depth ?? 1) === 1;
+            // NS名: level0 + level1 + level2 を "." で結合
+            // level0/1/2 のleaf名を順に結合してフルパスを組み立てる
+            const lvParts = ['level0','level1','level2']
+                .map(lv => ns[lv] ? nsNameMap[(ns[lv]).toUpperCase()] : null)
+                .filter(Boolean);
+            const nsFullName = lvParts.join('.');
+            // ネームスペースIDは最深レベルのID（サブNSなら level1/2）
+            const nsDeepId = (ns.level2 ?? ns.level1 ?? ns.level0 ?? '').toUpperCase();
+            const nsId = nsDeepId;
+            // ステータス: 有効=緑, 期限切れ=赤
+            const isExpired = endH !== 0 && endH < 99_999_999 && remainBlocks < 0;
+            const statusDot = isExpired
+                ? '<span style="color:red;font-size:16px;">🔴</span>'
+                : '<span style="color:#00b050;font-size:16px;">🟢</span>';
+            // タイプ & リンク
+            const alias = ns.alias ?? {};
+            let aliasType = '', aliasLink = '';
+            if (alias.type === 1) {
+                aliasType = 'Mosaic';
+                aliasLink = alias.mosaicId ?? '';
+            } else if (alias.type === 2) {
+                aliasType = 'Address';
+                aliasLink = alias.address ? hexToAddress(alias.address) : '';
+            }
+
             const row = document.createElement('tr');
-            [
-                String(idx + 1 + (pageNum - 1) * 50),
-                nsName,
-                expiryStr,
-                isRoot ? 'ルート' : 'サブ'
-            ].forEach((text, ci) => {
+            row.style.cssText = idx % 2 === 0 ? 'background:#e8f8f0;' : 'background:#fff;';
+
+            const cellData = [
+                { text: nsFullName || nsId, bold: true },
+                { text: nsId, mono: true },
+                { text: expiryStr },
+                { html: statusDot, center: true },
+                { text: aliasType, center: true },
+                { text: aliasLink, mono: true, small: true },
+            ];
+            cellData.forEach(({ text, html, bold, mono, center, small }) => {
                 const td = document.createElement('td');
-                td.textContent = text;
-                td.style.textAlign = ci === 0 ? 'right' : ci === 3 ? 'center' : 'left';
+                td.style.cssText = `padding:5px 8px;border-bottom:1px solid #cde;text-align:${center ? 'center' : 'left'};${mono ? 'font-family:monospace;' : ''}${bold ? 'font-weight:bold;' : ''}${small ? 'font-size:11px;word-break:break-all;' : ''}`;
+                if (html) td.innerHTML = html;
+                else td.textContent = text ?? '';
                 row.appendChild(td);
             });
             tblBody.appendChild(row);
 
-            // セレクトボックスにも追加
-            if (nsSel && isRoot) {
+            // セレクトボックスにも追加（ルートのみ）
+            if (nsSel && (ns.depth ?? 1) === 1) {
                 const opt = document.createElement('option');
-                opt.value = nsName;
-                opt.textContent = nsName;
+                opt.value = nsFullName || nsId;
+                opt.textContent = nsFullName || nsId;
                 nsSel.appendChild(opt);
             }
         });
 
         tbl.appendChild(tblBody);
+        nsTbl.innerHTML = '';
         nsTbl.appendChild(tbl);
     } catch (e) {
         console.error('[select_Page_namespace]', e);
+        if (nsTbl) nsTbl.innerHTML = `<span style="color:red;">エラー: ${e.message}</span>`;
     }
 }
 
@@ -2127,8 +2531,12 @@ async function select_Page_meta() {
     const addr = window.SSS?.activeAddress;
     if (!addr) return;
 
-    const metaTbl = document.getElementById('meta_table');
-    if (metaTbl) metaTbl.innerHTML = '';
+    const metaTbl = document.getElementById('Meta_table');
+    if (metaTbl) metaTbl.innerHTML = '<span style="color:#aaa;font-size:13px;">読み込み中...</span>';
+
+    // Meta_select（キー選択セレクトボックス）をクリア
+    const metaSel = document.querySelector('.Meta_select');
+    if (metaSel) metaSel.innerHTML = '';
 
     try {
         const data = await fetchJson(new URL(
@@ -2137,22 +2545,49 @@ async function select_Page_meta() {
         const metas = data.data ?? [];
         if (!metaTbl) return;
 
+        // ── セレクトボックスにメタデータキーを追加 ──
+        if (metaSel && metas.length > 0) {
+            const sel = document.createElement('select');
+            sel.className = 'select_Meta';
+            sel.style.cssText = 'width:100%;padding:6px;border-radius:6px;font-family:monospace;';
+            const defOpt = document.createElement('option');
+            defOpt.value = '';
+            defOpt.textContent = '--- 新規入力 ---';
+            sel.appendChild(defOpt);
+            metas.forEach(m => {
+                const meta = m.metadataEntry ?? m;
+                const key = meta.scopedMetadataKey ?? '';
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = key;
+                sel.appendChild(opt);
+            });
+            // 選択時に Meta_key へ自動入力
+            sel.addEventListener('change', () => {
+                const keyEl = document.getElementById('Meta_key');
+                if (keyEl) keyEl.value = sel.value;
+            });
+            metaSel.appendChild(sel);
+        }
+
         const tbl = document.createElement('table');
-        tbl.setAttribute('border', '1');
+        tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
         const tblBody = document.createElement('tbody');
 
+        // ヘッダー
+        const headers = ['メタデータキー','タイプ','モザイクID / ネームスペース','Value(値)','送信者アドレス','対象アドレス'];
         const hdr = document.createElement('tr');
-        ['No', 'キー', '値', '送信者'].forEach(h => {
-            const th = document.createElement('td');
+        headers.forEach(h => {
+            const th = document.createElement('th');
             th.textContent = h;
-            th.style.textAlign = 'center';
+            th.style.cssText = 'background:#0a5;color:#fff;padding:6px 8px;text-align:center;white-space:nowrap;';
             hdr.appendChild(th);
         });
         tblBody.appendChild(hdr);
 
         metas.forEach((m, idx) => {
             const meta = m.metadataEntry ?? m;
-            const row = document.createElement('tr');
+            // 値をhex→文字列デコード
             const valueHex = meta.value ?? '';
             let valueStr = '';
             try {
@@ -2160,21 +2595,44 @@ async function select_Page_meta() {
                     ...valueHex.match(/.{1,2}/g).map(b => parseInt(b, 16))
                 )));
             } catch { valueStr = valueHex; }
+
+            // タイプ判定 (0=Account, 1=Mosaic, 2=Namespace)
+            const metaType = meta.metadataType ?? 0;
+            const typeStr = metaType === 1 ? 'Mosaic' : metaType === 2 ? 'Namespace' : 'Account';
+            const refId = meta.targetId ?? meta.scopedMetadataKey ?? '';
+
             const senderAddr = meta.sourceAddress?.length === 48
                 ? hexToAddress(meta.sourceAddress) : (meta.sourceAddress ?? '');
-            [String(idx + 1), meta.scopedMetadataKey ?? '', valueStr, senderAddr].forEach((text, ci) => {
+            const targetAddr = meta.targetAddress?.length === 48
+                ? hexToAddress(meta.targetAddress) : (meta.targetAddress ?? '');
+            const metaKey = meta.scopedMetadataKey ?? '';
+
+            const row = document.createElement('tr');
+            row.style.cssText = idx % 2 === 0 ? 'background:#e8f8f0;' : 'background:#fff;';
+
+            const cells = [
+                { text: metaKey, mono: true },
+                { text: typeStr, center: true },
+                { text: typeStr !== 'Account' ? refId : '', mono: true, small: true },
+                { text: valueStr, small: true },
+                { text: senderAddr, mono: true, small: true },
+                { text: targetAddr, mono: true, small: true },
+            ];
+            cells.forEach(({ text, mono, center, small }) => {
                 const td = document.createElement('td');
-                td.textContent = text;
-                td.style.textAlign = ci === 0 ? 'right' : 'left';
+                td.style.cssText = `padding:5px 8px;border-bottom:1px solid #cde;text-align:${center ? 'center' : 'left'};${mono ? 'font-family:monospace;' : ''}${small ? 'font-size:10px;word-break:break-all;' : ''}`;
+                td.textContent = text ?? '';
                 row.appendChild(td);
             });
             tblBody.appendChild(row);
         });
 
         tbl.appendChild(tblBody);
+        metaTbl.innerHTML = '';
         metaTbl.appendChild(tbl);
     } catch (e) {
         console.error('[select_Page_meta]', e);
+        if (metaTbl) metaTbl.innerHTML = `<span style="color:red;">エラー: ${e.message}</span>`;
     }
 }
 
@@ -2685,7 +3143,8 @@ export async function loadMsigTree() {
                 strokeW = 1.5;
             }
 
-            let inner = `<text x="${x+NW/2}" y="${y+20}" text-anchor="middle" font-size="11" font-weight="bold" fill="#fff">${addrShort(n.addr)}</text>`;
+            const labelY = n.isMsig ? y+20 : y + NH/2 + 4;
+            let inner = `<text x="${x+NW/2}" y="${labelY}" text-anchor="middle" font-size="11" font-weight="bold" fill="#fff">${addrShort(n.addr)}</text>`;
             if (n.isMsig) {
                 inner += `<text x="${x+NW/2}" y="${y+36}" text-anchor="middle" font-size="10" fill="#fff">最小承認者数: ${n.minAp}</text>`;
                 inner += `<text x="${x+NW/2}" y="${y+50}" text-anchor="middle" font-size="10" fill="#fff">最小削除承認者数: ${n.minRm}</text>`;

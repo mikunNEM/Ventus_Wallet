@@ -8031,7 +8031,7 @@ function openPopup(treeHeight = 300, separationHeight = 100) {
                                 .attr("stroke", d => d.data.color === "lightpink" ? "pink" : "lightblue");
 
                             node.append("text")
-                                .attr("dy", 0)
+                                .attr("dy", d => d.data.approval !== undefined && d.data.approval > 0 ? "-1.5em" : "-0.35em")
                                 .attr("x", 0)
                                 .attr("text-anchor", "middle")
                                 .selectAll("tspan")

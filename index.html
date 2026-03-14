@@ -166,7 +166,8 @@
           <div id="tree_button" style="text-align: right"></div>
           <br>
           <div style="text-align: right">
-            <button id="js-show-popup_multisig" class="btn-gradient-radius_2" style="font-size: 16px; display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px;">
+            <button id="js-show-popup_multisig" class="btn-gradient-radius_2"
+              style="font-size: 16px; display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px;">
               <span style="font-size: 20px;">📤</span>
               <span>マルチシグ送信</span>
               <p id="account_append_info_1" style="margin:0; font-size:12px;"></p>
@@ -1197,7 +1198,7 @@
         <!-- 数量 -->
         <div class="msig-send-field">
           <label class="msig-send-field-label" for="multisig_amount">📦 数量</label>
-          <input type="text" class="msig-send-input" id="multisig_amount" placeholder="0.000000" />
+          <input type="text" class="msig-send-input" id="multisig_amount" />
         </div>
 
         <!-- メッセージ -->
@@ -1208,7 +1209,7 @@
         </div>
 
         <!-- 手数料インフォ -->
-        <div class="msig-send-fee-info">
+        <div class="msig-send-fee-info msig-send-fee-notice">
           <span class="msig-send-fee-icon">💰</span>
           <div>
             <div class="msig-send-fee-main">手数料 + HashLock <strong>10 XYM</strong>（起案者アカウントに必要）</div>
@@ -1281,6 +1282,15 @@
         if (!elem) return;
         elem.addEventListener('click', function () {
           popup_m.classList.toggle('is-show');
+        });
+      }
+
+      // ポップアップを開いた時にモザイク一覧を自動ロード
+      if (showBtn) {
+        showBtn.addEventListener('click', function () {
+          setTimeout(function () {
+            if (typeof window.select_Page_mosa1 === 'function') window.select_Page_mosa1();
+          }, 50);
         });
       }
     }
@@ -1402,6 +1412,15 @@
         if (!elem) return;
         elem.addEventListener('click', function () {
           popup_Meta.classList.toggle('is-show');
+        });
+      }
+
+      // ポップアップを開いた時にメタデータ一覧を自動ロード
+      if (showBtn) {
+        showBtn.addEventListener('click', function () {
+          setTimeout(function () {
+            if (typeof window.select_Page_meta === 'function') window.select_Page_meta();
+          }, 50);
         });
       }
     }
