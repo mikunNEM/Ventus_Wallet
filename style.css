@@ -292,9 +292,7 @@ button.accountInfo{
 }
 
 .account-card #m_ns_button {
-  position: absolute;
-  top: -40px; 
-  right: 20px;
+  text-align: right;
 }
 
 .account-card #account_name {
