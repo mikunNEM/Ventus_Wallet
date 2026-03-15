@@ -1528,7 +1528,7 @@
 
       closePopUp(blackBg);
       closePopUp(closeBtn);
-      closePopUp(showBtn);
+      // showBtnは下で個別処理
       function closePopUp(elem) {
         if (!elem) return;
         elem.addEventListener('click', function () {
@@ -1536,22 +1536,18 @@
         });
       }
 
-      // モーダルを開いた時にアカウント情報を表示（1回のみ）
-      var _msigLoaded = false;
       if (showBtn) {
         showBtn.addEventListener('click', function () {
-          if (!_msigLoaded) {
-            _msigLoaded = true;
-            setTimeout(function () { loadMsigInfo(); }, 50);
+          popup_Msig.classList.toggle('is-show');
+          if (popup_Msig.classList.contains('is-show')) {
+            // モーダルを開くたびにアカウント情報を再ロード
+            setTimeout(async function () {
+              if (typeof window.loadMsigPanelInfo === 'function') {
+                await window.loadMsigPanelInfo();
+              }
+            }, 50);
           }
         });
-      }
-
-      async function loadMsigInfo() {
-        // main.js の loadMsigPanelInfo を呼ぶ（export 済み）
-        if (typeof window.loadMsigPanelInfo === 'function') {
-          await window.loadMsigPanelInfo();
-        }
       }
     }
     popupImage_Msig();

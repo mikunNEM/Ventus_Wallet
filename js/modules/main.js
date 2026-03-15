@@ -54,6 +54,7 @@ import {
 
 import {
     signAndAnnounce,
+    signOnly,
     buildTransferTx, buildEmbeddedTransferTx,
     buildAggregateCompleteTx, buildAggregateBondedTx,
     buildHashLockTx,
@@ -296,9 +297,84 @@ function connectWebSocket(activeAddress, onConfirmed, onUnconfirmed, onPartialAd
 // マルチシグ署名リクエスト処理
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * REST API の JSON レスポンスから AggregateBonded TX の payload hex を再構築する
+ * 遠隔の連署者が SSS で cosign するために必要
+ */
+function reconstructBondedPayload(txJson) {
+    const t = txJson.transaction;
+
+    // hex アドレス(48文字) → base32 文字列に変換するヘルパー
+    const toBase32 = a => a.length === 48
+        ? new sdkSymbol.Address(sdkCore.utils.hexToUint8(a)).toString()
+        : a; // 既に base32 ならそのまま
+
+    // ── embedded TX を既存ビルド関数で再構築 ────────────────────────────────
+    const embeddedTxs = (t.transactions ?? []).map(item => {
+        const inner = item.transaction;
+        const signerHex = inner.signerPublicKey;
+        const typeNum   = inner.type;
+
+        // MULTISIG_ACCOUNT_MODIFICATION (0x4155)
+        if (typeNum === 0x4155) {
+            const adds = (inner.addressAdditions ?? []).map(toBase32);
+            const dels = (inner.addressDeletions  ?? []).map(toBase32);
+            return buildMultisigModificationEmbeddedTx(
+                inner.minApprovalDelta, inner.minRemovalDelta, adds, dels, signerHex
+            );
+        }
+        // TRANSFER (0x4154 / 0x4254)
+        if (typeNum === 0x4154 || typeNum === 0x4254) {
+            const recip    = toBase32(inner.recipientAddress);
+            const mosaicId = inner.mosaics?.[0]?.id ?? '0000000000000000';
+            const amount   = inner.mosaics?.[0]?.amount ?? '0';
+            const msgHex   = inner.message ?? '00';
+            const msgBytes = sdkCore.utils.hexToUint8(msgHex);
+            return buildEmbeddedTransferTx(recip, mosaicId, BigInt(amount), msgBytes, signerHex);
+        }
+        throw new Error(`未対応の embedded TX タイプ: 0x${typeNum.toString(16)}`);
+    });
+
+    // ── AggregateBonded TX を組み立て ─────────────────────────────────────
+    const cosigCount = (t.cosignatures ?? []).length;
+    const txsHash  = facade.constructor.hashEmbeddedTransactions(embeddedTxs);
+    const aggrDesc = new sdkSymbol.descriptors.AggregateBondedTransactionV3Descriptor(txsHash, embeddedTxs);
+    const DEADLINE_48H = 60 * 60 * 48;
+    const tx = facade.createTransactionFromTypedDescriptor(aggrDesc, t.signerPublicKey, 100, DEADLINE_48H, cosigCount);
+
+    // ── Symbol TX バイナリ直接パッチで fee/deadline/signature を元の値に合わせる ──
+    // SDK セッターを使うと tx.size がNaNになるため、serialize後にバイトを直接書き換える
+    // Symbol AggregateBonded V3 のバイナリレイアウト:
+    //   [0-3]   size (uint32_le)
+    //   [4-7]   reserved
+    //   [8-71]  signature (64 bytes)
+    //   [72-103] signerPublicKey (32 bytes)
+    //   [104-107] reserved
+    //   [108]   version, [109] network, [110-111] type
+    //   [112-119] fee (uint64_le)
+    //   [120-127] deadline (uint64_le)
+    //   [128-159] transactionsHash
+    //   [160-163] payloadSize, [164-167] reserved
+    //   [168+]  embedded transactions
+    const rawBytes = tx.serialize();
+
+    rawBytes.set(sdkCore.utils.hexToUint8(t.signature), 8);
+    new DataView(rawBytes.buffer, rawBytes.byteOffset + 112, 8).setBigUint64(0, BigInt(t.maxFee), true);
+    new DataView(rawBytes.buffer, rawBytes.byteOffset + 120, 8).setBigUint64(0, BigInt(t.deadline), true);
+
+    return sdkCore.utils.uint8ToHex(rawBytes);
+}
+
 async function handlePartialTx(txData, activeAddress, xymMosaicIdHex) {
     const hash = txData.meta?.hash;
     if (!hash) return;
+
+    // 起案者（自分がTXに署名済み）の場合はダイアログ不要
+    const txSignerPubKey = txData.transaction?.signerPublicKey;
+    if (txSignerPubKey && txSignerPubKey === window.SSS?.activePublicKey) {
+        console.log('[handlePartialTx] 起案者のため署名リクエストをスキップ:', hash);
+        return;
+    }
 
     const confirmed = await Swal.fire({
         title: '署名リクエスト',
@@ -310,22 +386,43 @@ async function handlePartialTx(txData, activeAddress, xymMosaicIdHex) {
     });
     if (!confirmed.isConfirmed) return;
 
-    // AggregateBondedにコサインして送信
-    const cosigPayload = sdkCore.utils.uint8ToHex(
-        new TextEncoder().encode(JSON.stringify({ parentHash: hash }))
-    );
-    window.SSS.setTransactionByPayload(cosigPayload);
     try {
-        const signed = await window.SSS.requestSignCosignature();
-        await fetch(new URL('/transactions/cosignature', NODE), {
+        // Bonded TX の詳細を REST から取得して payload を再構築
+        const res = await fetch(new URL(`/transactions/partial/${hash}`, NODE));
+        if (!res.ok) throw new Error(`Bonded TX 取得失敗: ${res.status}`);
+        const txJson = await res.json();
+
+        // REST JSON → Symbol SDK v3 オブジェクト → payload hex に再構築
+        const payloadHex = reconstructBondedPayload(txJson);
+        console.log('[cosign] reconstructed payload length:', payloadHex.length);
+
+        // SSS に payload をセットして連署署名
+        window.SSS.setTransactionByPayload(payloadHex);
+        const cosig = await window.SSS.requestSignCosignatureTransaction();
+        console.log('[cosign] cosig result:', cosig);
+
+        const parentHash     = cosig?.parentHash ?? hash;
+        const signature      = cosig?.signature;
+        const signerPublicKey = cosig?.signerPublicKey;
+        const version        = String(cosig?.version ?? 0); // Symbol REST が version を必要とする (uint64文字列)
+
+        if (!signature || !signerPublicKey) {
+            throw new Error('署名データが取得できませんでした');
+        }
+
+        const cosigRes = await fetch(new URL('/transactions/cosignature', NODE), {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ parentHash: hash, signature: signed.signature, signerPublicKey: signed.signerPublicKey }),
+            body: JSON.stringify({ parentHash, signature, signerPublicKey, version }),
         });
+        const cosigJson = await cosigRes.json().catch(() => ({}));
+        console.log('[cosign] status:', cosigRes.status, cosigJson);
+        if (!cosigRes.ok) throw new Error(JSON.stringify(cosigJson));
+
         Swal.fire('署名完了！', '連署が送信されました。', 'success');
     } catch (e) {
         console.error('[cosign]', e);
-        Swal.fire('エラー', '署名に失敗しました。', 'error');
+        Swal.fire('エラー', '署名に失敗しました: ' + e.message, 'error');
     }
 }
 
@@ -1123,8 +1220,10 @@ async function main() {
             if (popup) popup.classList.remove('is-show');
             const audioVentus = new Audio('./src/ventus.mp3');
             audioVentus.play();
-            // 承認検知 → 5秒後にリロード（音が鳴り終わってから）
-            setTimeout(() => location.reload(), 5000);
+            // 承認検知 → Bonded TX が pending中はリロードしない（リロードすると partialAdded が消える）
+            if (!sessionStorage.getItem('_pendingBondedPayload')) {
+                setTimeout(() => location.reload(), 5000);
+            }
         },
         (tx) => {
             const audio1 = new Audio('./src/ding.ogg');
@@ -1161,6 +1260,7 @@ async function main() {
     window.alias_type_change = () => alias_type_change();
     window.Metadata = () => Metadata(activeAddress);
     window.Msig_account = () => Msig_account(activeAddress);
+    window.loadMsigPanelInfo = () => loadMsigPanelInfo();
     window.handleSSS_multisig = () => handleSSS_multisig(activeAddress);
     window.handleSSS_dona = () => handleSSS_dona(activeAddress);
 
@@ -1182,6 +1282,32 @@ async function main() {
     // initMsigAddButton は未実装（将来実装予定）
     await updateMsigBadge(activeAddress);
     await loadMsigPanelInfo();
+
+    // ─── 起動時: リロード後の pending Bonded TX を確認して announce ───
+    const pendingBonded = sessionStorage.getItem('_pendingBondedPayload');
+    if (pendingBonded) {
+        console.log('[main] pending Bonded TX を検出 → announce します');
+        try {
+            await announceTransaction(pendingBonded, true);
+            sessionStorage.removeItem('_pendingBondedPayload');
+            Swal.fire({ title: 'Bonded TX を送信しました！', text: '連署者の署名を待っています。', icon: 'success' });
+        } catch (e) {
+            console.warn('[main] pending Bonded announce 失敗:', e);
+            // payload はそのまま残しておく（次回リロード時に再試行）
+        }
+    }
+
+    // ─── 起動時: 署名待ち Partial TX を確認してダイアログ表示 ───
+    try {
+        const partialResult = await searchPartialTransactions({ address: activeAddress, pageSize: 10 });
+        const partialTxs = partialResult?.data ?? [];
+        for (const txItem of partialTxs) {
+            const txData = { meta: txItem.meta, transaction: txItem.transaction };
+            await handlePartialTx(txData, activeAddress, XYM_ID);
+        }
+    } catch (e) {
+        console.warn('[main] partial TX 確認失敗:', e);
+    }
 
     console.log('[main] 初期化完了');
 }
@@ -1220,6 +1346,7 @@ async function initAccountAndUI() {
     window.alias_type_change = () => alias_type_change();
     window.Metadata = () => Metadata(addr);
     window.Msig_account = () => Msig_account(addr);
+    window.loadMsigPanelInfo = () => loadMsigPanelInfo();
     window.handleSSS_multisig = () => handleSSS_multisig(addr);
     window.handleSSS_dona = () => handleSSS_dona(addr);
     window.loadMsigPanelInfo = () => loadMsigPanelInfo();
@@ -1944,51 +2071,152 @@ async function Metadata(activeAddress) {
 // マルチシグアカウント作成
 // ─────────────────────────────────────────────────────────────────────────────
 
+// 内部ステート: 追加予定の連署者アドレス一覧
+const _msigAddList = [];
+// 内部ステート: 削除予定の連署者アドレス一覧
+const _msigRemoveList = [];
+
+/** add-button の初期化（1回だけ呼ぶ） */
+function initMsigAddButton() {
+    const addBtn = document.getElementById('add-button');
+    if (!addBtn || addBtn._msigInited) return;
+    addBtn._msigInited = true;
+
+    addBtn.addEventListener('click', () => {
+        const input = document.getElementById('input-text');
+        const val = (input?.value ?? '').trim();
+        if (!val) { Swal.fire({ title: 'アドレスを入力してください。', icon: 'warning' }); return; }
+
+        // 重複チェック
+        if (cosigList.includes(val)) {
+            Swal.fire({ title: '既に追加されています。', icon: 'info' }); return;
+        }
+        cosigList.push(val);
+        if (input) input.value = '';
+
+        // display-containerに表示
+        const container = document.getElementById('display-container');
+        if (container) {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;font-family:monospace;';
+            row.dataset.address = val;
+
+            const span = document.createElement('span');
+            span.style.cssText = 'flex:1;word-break:break-all;';
+            span.textContent = val;
+
+            const delBtn = document.createElement('button');
+            delBtn.textContent = '🗑️';
+            delBtn.style.cssText = 'border:none;background:none;cursor:pointer;font-size:14px;';
+            delBtn.addEventListener('click', () => {
+                const idx = cosigList.indexOf(val);
+                if (idx >= 0) cosigList.splice(idx, 1);
+                row.remove();
+            });
+
+            row.appendChild(span);
+            row.appendChild(delBtn);
+            container.appendChild(row);
+        }
+    });
+
+    // Enterキーでも追加
+    const input = document.getElementById('input-text');
+    if (input && !input._msigEnterInited) {
+        input._msigEnterInited = true;
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('add-button')?.click();
+        });
+    }
+}
+
+/**
+ * HashLock TX が confirm されるまでポーリングで待つ
+ * @param {string} hashHex - HashLock TX のハッシュ (hex)
+ * @param {number} timeoutMs - タイムアウト（ms）デフォルト 120秒
+ * @param {number} intervalMs - ポーリング間隔（ms）デフォルト 5秒
+ */
+async function waitForHashLockConfirmed(hashHex, timeoutMs = 120_000, intervalMs = 5_000) {
+    const node = window.ventus_NODE;
+    if (!node) throw new Error('NODE not initialized');
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        try {
+            const res = await fetch(new URL(`/transactions/confirmed/${hashHex}`, node));
+            if (res.ok) return; // confirmed!
+        } catch {}
+        await new Promise(r => setTimeout(r, intervalMs));
+    }
+    throw new Error('HashLock の承認タイムアウト（120秒）。ネットワークを確認してください。');
+}
+
 async function Msig_account(activeAddress) {
-    const minApproval = Number(document.getElementById('min_sig')?.value ?? 1);
-    const minRemoval = Number(document.getElementById('min_del_sig')?.value ?? 1);
     const signerPubKey = window.SSS.activePublicKey;
 
-    // 連署者アドレスを取得（複数行 id="cosign_addr_N" の入力欄）
-    const addAddresses = [];
-    for (let i = 1; i <= 25; i++) {
-        const el = document.getElementById(`cosign_addr_${i}`);
-        if (!el || !el.value.trim()) break;
-        addAddresses.push(el.value.trim());
+    // cosigList: add-buttonで追加されたアドレス一覧
+    // deleteList: 削除ボタンで選択されたアドレス一覧
+    const addAddresses = [...cosigList];
+    const removeAddresses = [...deleteList];
+
+    if (addAddresses.length === 0 && removeAddresses.length === 0) {
+        Swal.fire({ title: '連署者を追加または削除してください。', icon: 'warning' }); return;
     }
 
-    // フォールバック: 1行のみの入力欄
-    if (addAddresses.length === 0) {
-        const el = document.getElementById('cosign_addr');
-        if (el && el.value.trim()) {
-            el.value.trim().split(/\n|,/).forEach(a => {
-                const addr = a.trim();
-                if (addr) addAddresses.push(addr);
-            });
-        }
-    }
-
-    if (addAddresses.length === 0) {
-        Swal.fire({ title: '連署者アドレスを入力してください。', icon: 'warning' }); return;
+    let minApprovalDelta, minRemovalDelta;
+    if (msigIsEditMode) {
+        // 既存マルチシグ編集: delta_sig/delta_del_sigの値 - 現在値
+        const newApproval = Number(document.getElementById('delta_sig')?.value ?? _currentMinApproval);
+        const newRemoval  = Number(document.getElementById('delta_del_sig')?.value ?? _currentMinRemoval);
+        minApprovalDelta = newApproval - _currentMinApproval;
+        minRemovalDelta  = newRemoval  - _currentMinRemoval;
+    } else {
+        // 新規マルチシグ設定: min_sig/min_del_sigの値がそのままdelta
+        minApprovalDelta = Number(document.getElementById('min_sig')?.value ?? 1);
+        minRemovalDelta  = Number(document.getElementById('min_del_sig')?.value ?? 1);
     }
 
     try {
         const innerTx = buildMultisigModificationEmbeddedTx(
-            minApproval, minRemoval, addAddresses, [], signerPubKey
+            minApprovalDelta, minRemovalDelta, addAddresses, removeAddresses, signerPubKey
         );
-        const aggregateTx = buildAggregateCompleteTx([innerTx], signerPubKey, addAddresses.length, 100);
 
-        const feeXym = Number(aggregateTx.fee.value) / 1_000_000;
+        // ── Bonded先署名フロー ──────────────────────────────────────────
+        // ① AggregateBonded を先に署名（SSS ダイアログ1回目）
+        const aggregateBonded = buildAggregateBondedTx([innerTx], signerPubKey, addAddresses.length, 100);
+
+        const feeXym = Number(aggregateBonded.fee.value) / 1_000_000;
         const feeEl = document.getElementById('fee_Msig');
-        if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
+        if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM（+ HashLock 10 XYM）</p>`;
 
-        await signAndAnnounce(aggregateTx);
-        Swal.fire({ title: 'マルチシグアカウント作成を送信しました！', icon: 'success' });
+        const { payload: bondedSignedPayload, hash: bondedHashHex } = await signOnly(aggregateBonded);
+        // SSS が1回目ダイアログを完全に閉じるまで少し待つ
+        await new Promise(r => setTimeout(r, 1000));
+        // signed payload を sessionStorage に保存（リロード後も残る）
+        sessionStorage.setItem('_pendingBondedPayload', bondedSignedPayload);
+
+        // ② HashLock を署名してannounce（SSSが返したhashを使う）
+        const hashLockTx = buildHashLockTx(bondedHashHex, signerPubKey, XYM_ID);
+        const hashLockTxHash = sdkCore.utils.uint8ToHex(facade.hashTransaction(hashLockTx).bytes);
+        await signAndAnnounce(hashLockTx);
+
+        Swal.fire({ title: 'Hash Lock 送信済み', text: 'ブロックチェーンの承認を待っています...', icon: 'info', timer: 5000, showConfirmButton: false });
+
+        // ③ confirm をポーリング待機
+        await waitForHashLockConfirmed(hashLockTxHash);
+
+        // ④ sessionStorage から Bonded payload を取り出して announce（署名不要）
+        const storedPayload = sessionStorage.getItem('_pendingBondedPayload');
+        if (!storedPayload) throw new Error('Bonded TX のペイロードが見つかりません');
+        await announceTransaction(storedPayload, true);
+        sessionStorage.removeItem('_pendingBondedPayload');
+
+        Swal.fire({ title: 'マルチシグアカウント設定を送信しました！', text: '連署者の署名を待っています。', icon: 'success' });
     } catch (e) {
         console.error('[Msig_account]', e);
         Swal.fire({ title: 'マルチシグアカウント作成失敗', text: e.message, icon: 'error' });
     }
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // マルチシグアカウントからの転送
@@ -2057,15 +2285,30 @@ async function handleSSS_multisig(activeAddress) {
             const feeEl = document.getElementById('fee_multisig');
             if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM（+ HashLock 10 XYM）</p>`;
 
-            const bondedHash = sdkCore.utils.uint8ToHex(facade.hashTransaction(aggregateBonded).bytes);
-            const hashLockTx = buildHashLockTx(bondedHash, signerPubKey, XYM_ID);
+            // ── Bonded先署名フロー ──────────────────────────────────────────
+            // ① AggregateBonded を先に署名（SSS ダイアログ1回目）
+            const { payload: bondedSignedPayload, hash: bondedHashHex } = await signOnly(aggregateBonded);
+            // SSS が1回目ダイアログを完全に閉じるまで少し待つ
+            await new Promise(r => setTimeout(r, 1000));
+            sessionStorage.setItem('_pendingBondedPayload', bondedSignedPayload);
+
+            // ② HashLock を署名してannounce（SSSが返したhashを使う）
+            const hashLockTx = buildHashLockTx(bondedHashHex, signerPubKey, XYM_ID);
+            const hashLockTxHash = sdkCore.utils.uint8ToHex(facade.hashTransaction(hashLockTx).bytes);
             await signAndAnnounce(hashLockTx);
 
-            Swal.fire({ title: 'Hash Lock 送信済み', text: '数秒後に Aggregate Bonded を送信します...', icon: 'info', timer: 4000, showConfirmButton: false });
-            await new Promise(r => setTimeout(r, 4500));
+            Swal.fire({ title: 'Hash Lock 送信済み', text: 'ブロックチェーンの承認を待っています...', icon: 'info', timer: 5000, showConfirmButton: false });
 
-            await signAndAnnounce(aggregateBonded, true);
-            Swal.fire({ title: 'マルチシグ転送を送信しました！', icon: 'success' });
+            // ③ confirm をポーリング待機
+            await waitForHashLockConfirmed(hashLockTxHash);
+
+            // ④ sessionStorage から Bonded payload を announce（署名不要）
+            const storedPayload = sessionStorage.getItem('_pendingBondedPayload');
+            if (!storedPayload) throw new Error('Bonded TX のペイロードが見つかりません');
+            await announceTransaction(storedPayload, true);
+            sessionStorage.removeItem('_pendingBondedPayload');
+
+            Swal.fire({ title: 'マルチシグ転送を送信しました！', text: '連署者の署名を待っています。', icon: 'success' });
         }
     } catch (e) {
         console.error('[handleSSS_multisig]', e);
@@ -2374,6 +2617,9 @@ export async function loadMsigPanelInfo() {
     cosigList.length = 0;
     deleteList.length = 0;
     _msigTargetAddress = '';
+
+    // add-buttonハンドラを登録
+    initMsigAddButton();
 
     const node = window.ventus_NODE;
     if (!node) return;

@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>js-clipboard-copy</title>
+	<style>
+		
+		.copy_container {
+			display: flex;
+			column-gap: 20px;
+		    align-items: center;
+		}
+		.copy_bt {
+			padding: 5px 10px;
+			position: relative;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="copy_container">
+		
+			<p class="signer_address">https://web-de-asobo.net/</p>		
+	    	<button type="button" class="copy_bt">Copy</button>
+	</div>
+	
+	<script>
+		{
+		//const HP_URL = document.querySelector('.signer_address'); //　signer_address クラスの要素の最初のものを返す
+		//const HP_URL_TEXT = HP_URL.textContent; // テキストを返す
+		
+		const COPY_BT = document.querySelector('.copy_bt');
+		const COPY_COMPLETE = document.createElement('div');
+		COPY_COMPLETE.innerHTML = '<strong style="color: green;">Copied!</strong>';
+		
+		COPY_BT.addEventListener('click', () => {
+			navigator.clipboard.writeText("TDX2VZOKJ6FHDG63ID7VZJN6XJC4ZPAOB7F3MVY");
+			COPY_BT.replaceWith(COPY_COMPLETE);
+			
+			setTimeout( () => {
+				COPY_COMPLETE.replaceWith(COPY_BT);
+			},1500);
+		});
+		}
+	</script>
+</body>
+</html>

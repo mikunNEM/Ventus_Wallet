@@ -45,6 +45,32 @@ export async function signAndAnnounce(tx, isBonded = false) {
     return signedPayload;
 }
 
+/**
+ * SSSでトランザクションに署名だけ行い signed payload hex を返す（announceしない）
+ * AggregateBonded を先署名してpayloadを保存しておく用途
+ * @param {object} tx
+ * @returns {Promise<string>} signedHex
+ */
+export async function signOnly(tx) {
+    window.SSS.setTransactionByPayload(sdkCore.utils.uint8ToHex(tx.serialize()));
+    const signedPayload = await window.SSS.requestSign();
+    const signedHex = (typeof signedPayload === 'string') ? signedPayload : signedPayload?.payload;
+    if (!signedHex) throw new Error('SSS requestSign: 署名済みペイロードが取得できませんでした');
+    // SSSがhashを返す場合はそれを使う。返さない場合はfacadeで計算
+    const hash = signedPayload?.hash
+        ?? sdkCore.utils.uint8ToHex(facade.hashTransaction(tx).bytes);
+    console.log('[signOnly] hash:', hash, 'from SSS:', !!signedPayload?.hash);
+
+    // localStorage に hash→payload を保存（連署者が同ブラウザで cosign できるように）
+    try {
+        const stored = JSON.parse(localStorage.getItem('_bondedPayloads') ?? '{}');
+        stored[hash.toUpperCase()] = signedHex;
+        localStorage.setItem('_bondedPayloads', JSON.stringify(stored));
+    } catch (e) { /* ignore */ }
+
+    return { payload: signedHex, hash };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 転送トランザクション
 // ─────────────────────────────────────────────────────────────────────────────
