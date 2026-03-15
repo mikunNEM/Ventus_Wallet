@@ -2,62 +2,319 @@
 <html lang="ja">
 
 <head>
-  <title>Harvest Checker</title>
+  <title>Harvest Checker | Ventus</title>
   <meta charset="utf-8" />
-  <link rel="stylesheet" href="style.css" type="text/css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;700;800&display=swap" rel="stylesheet">
   <script src="./js/jquery-3.6.3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      background-color: rgb(255, 252, 195);
-    }
-    .container_hv {
-      text-align: center;
+      font-family: 'Inter', sans-serif;
       min-height: 100vh;
-      padding-top: 100px;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 16px;
+      overflow-x: hidden;
     }
+
+    /* 背景アニメーション orbs */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.25;
+      pointer-events: none;
+      animation: float 8s ease-in-out infinite alternate;
+    }
+    body::before {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, #7c3aed, #4f46e5);
+      top: -100px; left: -100px;
+    }
+    body::after {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, #06b6d4, #10b981);
+      bottom: -80px; right: -80px;
+      animation-delay: -4s;
+    }
+    @keyframes float {
+      from { transform: translate(0, 0) scale(1); }
+      to   { transform: translate(30px, 30px) scale(1.1); }
+    }
+
+    /* メインカード */
+    .card {
+      width: 100%;
+      max-width: 480px;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 28px;
+      padding: 48px 40px 40px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.05) inset;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .emoji-header {
+      font-size: 3rem;
+      margin-bottom: 12px;
+      display: block;
+      animation: sway 3s ease-in-out infinite;
+    }
+    @keyframes sway {
+      0%, 100% { transform: rotate(-3deg); }
+      50%       { transform: rotate(3deg); }
+    }
+
+    .title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2rem;
+      font-weight: 800;
+      background: linear-gradient(90deg, #a78bfa, #60a5fa, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 36px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* アドレス入力 */
+    .input-wrap {
+      position: relative;
+      margin-bottom: 24px;
+    }
+    .input-wrap label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.5);
+      text-align: left;
+      margin-bottom: 8px;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+    #addr {
+      width: 100%;
+      background: rgba(255,255,255,0.07);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 14px 18px;
+      font-size: 0.9rem;
+      font-family: 'Inter', monospace;
+      color: #e2e8f0;
+      outline: none;
+      transition: border-color 0.25s, box-shadow 0.25s;
+      letter-spacing: 0.3px;
+    }
+    #addr::placeholder { color: rgba(255,255,255,0.25); }
+    #addr:focus {
+      border-color: rgba(167,139,250,0.6);
+      box-shadow: 0 0 0 3px rgba(167,139,250,0.15);
+    }
+
+    /* STARTボタン */
+    .btn-start {
+      width: 100%;
+      padding: 15px 32px;
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: 'Outfit', sans-serif;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #7c3aed, #4f46e5, #06b6d4);
+      background-size: 200% 200%;
+      color: #fff;
+      box-shadow: 0 8px 32px rgba(124, 58, 237, 0.45);
+      transition: transform 0.2s, box-shadow 0.2s, background-position 0.4s;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-start::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(rgba(255,255,255,0.15), transparent);
+      border-radius: inherit;
+    }
+    .btn-start:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(124, 58, 237, 0.6);
+      background-position: right center;
+    }
+    .btn-start:active { transform: translateY(0); }
+
+    /* ローディング */
+    #kurukuru_re { margin: 20px 0; min-height: 24px; }
+    .loading-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: rgba(255,255,255,0.6);
+      font-size: 0.85rem;
+    }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.15);
+      border-top-color: #a78bfa;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 結果エリア */
+    .result-area {
+      margin-top: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ステータスバッジ */
+    #hv_status {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 1.4rem;
+      font-weight: 700;
+      font-family: 'Outfit', sans-serif;
+      border-radius: 50px;
+      padding: 12px 32px;
+      letter-spacing: 0.5px;
+      transition: all 0.4s;
+    }
+    #hv_status.status-ok {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1.5px solid rgba(16, 185, 129, 0.35);
+      color: #34d399;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+    }
+    #hv_status.status-ng {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1.5px solid rgba(239, 68, 68, 0.35);
+      color: #f87171;
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+    }
+
+    /* インポータンス + ノード情報カード */
+    .info-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 16px;
+      padding: 20px 24px;
+      text-align: left;
+    }
+    .info-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 4px;
+    }
+    .info-value {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      word-break: break-all;
+    }
+    .info-value.highlight {
+      background: linear-gradient(90deg, #a78bfa, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-size: 1.3rem;
+    }
+
+    .divider {
+      height: 1px;
+      background: rgba(255,255,255,0.08);
+      margin: 14px 0;
+    }
+
+    /* フッター */
+    .footer {
+      margin-top: 36px;
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.25);
+      line-height: 1.8;
+    }
+    .footer a {
+      color: rgba(167,139,250,0.7);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer a:hover { color: #a78bfa; }
   </style>
 </head>
 
 <body>
-  <div class="container_hv">
-    <h4>Harvest Checker <br><br>🌾🌾🌾🌾🌾</h4>
-    <br>
-    <input type="text" id="addr" style="font-size: 25px" placeholder="Symbolアドレスを入力" />
-    <br><br><br><br>
-    <button type="button" class="btn-gradient-radius" onclick="harvest_checker();"
-      style="font-size: 30px; cursor: pointer">START</button>
-    <br><br>
+  <div class="card">
+    <span class="emoji-header">🌾</span>
+    <div class="title">Harvest Checker</div>
+    <div class="subtitle">Symbol Blockchain · Mainnet</div>
+
+    <div class="input-wrap">
+      <label for="addr">Symbol Address</label>
+      <input type="text" id="addr" placeholder="N から始まる 39 文字のアドレス" autocomplete="off" />
+    </div>
+
+    <button class="btn-start" onclick="harvest_checker()">⚡ CHECK</button>
+
     <div id="kurukuru_re"></div>
-    <br>
-    <div id="hv_status" style="font-size: 30px;"></div>
-    <br>
-    <div id="importance" style="font-size: 30px; font-family: 'Itim', cursive;"></div>
-    <br>
-    <div id="hv_node" style="font-size: 30px; font-family: 'Itim', cursive;"></div>
-    <br><br><br>
-    <div id="version">Powered by SYMBOL<br><a href='https://x.com/mikunNEM'><small>@mikunNEM</small></a></div>
+
+    <div class="result-area" id="result_area" style="display:none;">
+      <div id="hv_status"></div>
+      <div class="info-card" id="importance_card" style="display:none;">
+        <div class="info-label">Importance</div>
+        <div class="info-value highlight" id="importance"></div>
+      </div>
+      <div class="info-card" id="node_card" style="display:none;">
+        <div class="info-label">委任先ノード</div>
+        <div class="info-value" id="hv_node_host"></div>
+        <div class="divider"></div>
+        <div class="info-label">委任者数</div>
+        <div class="info-value" id="hv_node_count"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Powered by SYMBOL<br>
+      <a href="https://x.com/mikunNEM" target="_blank">@mikunNEM</a>
+    </div>
   </div>
 
   <script>
-    // ─────────────────────────────────────────────────────────────────────────
-    // 定数
-    // ─────────────────────────────────────────────────────────────────────────
     const TOTAL_CHAIN_IMPORTANCE = 78429286;
     let NODE = null;
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ノード自動選択（main.js / Mosaic_Viewer.html と同じ方式）
-    //   1. nodewatch.symbol.tools から最大10件ランダム取得
-    //   2. 🇯🇵 日本ノード優先 → isHealthy でフィルタ
-    //   3. ブロック高が最大のノードを選択
-    //   4. /node/health で稼動確認 → unhealthy なら次の候補へ
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── ノード自動選択（main.js / Mosaic_Viewer.html と同じ方式）──────────
     async function getAvailableNode() {
       const NODEWATCH_URL =
         'https://nodewatch.symbol.tools/api/symbol/nodes/peer?only_ssl=true&limit=10&order=random';
-
       const res   = await fetch(NODEWATCH_URL);
       const nodes = await res.json();
 
@@ -73,123 +330,119 @@
       for (const candidate of pool) {
         const nodeUrl = new URL(candidate.endpoint).origin;
         try {
-          const healthRes = await fetch(`${nodeUrl}/node/health`);
-          const health    = await healthRes.json();
-          if (health.status?.apiNode === 'up' && health.status?.db === 'up') {
+          const h = await fetch(`${nodeUrl}/node/health`);
+          const { status } = await h.json();
+          if (status?.apiNode === 'up' && status?.db === 'up') {
             console.log('[getAvailableNode] selected:', nodeUrl, '(height:', candidate.height, ')');
             return nodeUrl;
           }
-          console.warn('[getAvailableNode] unhealthy, skip:', nodeUrl);
-        } catch (e) {
-          console.warn('[getAvailableNode] health check failed, skip:', nodeUrl, e.message);
-        }
+        } catch { /* skip */ }
       }
-
       Swal.fire('Node Error', '使用可能なノードが見つかりませんでした。');
       return null;
     }
 
-    // ページ読み込み時にノードを事前取得
     (async () => { NODE = await getAvailableNode(); })();
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // メイン処理
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── ヘルパー ───────────────────────────────────────────────────────────
+    function showResult(ok, importancePct, host, delegateCount) {
+      const resultArea = document.getElementById('result_area');
+      resultArea.style.display = 'flex';
+
+      const status = document.getElementById('hv_status');
+      if (ok) {
+        status.textContent = '✅ 有効';
+        status.className   = 'status-ok';
+      } else {
+        status.textContent = '❌ 無効';
+        status.className   = 'status-ng';
+      }
+
+      const impCard = document.getElementById('importance_card');
+      if (importancePct !== null) {
+        document.getElementById('importance').textContent = importancePct + ' %';
+        impCard.style.display = 'block';
+      }
+
+      const nodeCard = document.getElementById('node_card');
+      if (host) {
+        document.getElementById('hv_node_host').textContent  = host;
+        document.getElementById('hv_node_count').textContent = delegateCount + ' アカウント';
+        nodeCard.style.display = 'block';
+      }
+    }
+
+    function resetResult() {
+      document.getElementById('result_area').style.display    = 'none';
+      document.getElementById('hv_status').className          = '';
+      document.getElementById('hv_status').textContent        = '';
+      document.getElementById('importance_card').style.display = 'none';
+      document.getElementById('node_card').style.display      = 'none';
+    }
+
+    // ── メイン ─────────────────────────────────────────────────────────────
     async function harvest_checker() {
-      const hv_status     = document.getElementById('hv_status');
-      const dom_importance = document.getElementById('importance');
-      const hv_node       = document.getElementById('hv_node');
-      hv_status.innerHTML  = '';
-      dom_importance.innerHTML = '';
-      hv_node.innerHTML    = '';
+      resetResult();
       dispLoading();
 
-      // ノードが未取得の場合は再取得
       if (!NODE) {
         NODE = await getAvailableNode();
         if (!NODE) { removeLoading(); return; }
       }
 
-      // アドレス正規化
       let addr = document.getElementById('addr').value
         .replace(/-/g, '').replace(/ /g, '').replace(/　/g, '');
 
       if (addr.length !== 39) {
-        Swal.fire('Address Error!!', '正しい文字数は39文字です').then(removeLoading);
-        return;
+        Swal.fire('Address Error!!', '正しい文字数は39文字です').then(removeLoading); return;
       }
       if (addr.charAt(0) !== 'N') {
-        Swal.fire('Address Error!!', 'メインネットアドレスの先頭は「N」です').then(removeLoading);
-        return;
+        Swal.fire('Address Error!!', 'メインネットアドレスの先頭は「N」です').then(removeLoading); return;
       }
 
-      // ── アカウント情報取得（v3: GET /accounts/{address}）────────────────
       let account;
       try {
         const res  = await fetch(`${NODE}/accounts/${addr}`);
         if (!res.ok) throw new Error(res.status);
-        const json = await res.json();
-        account    = json.account;
+        account = (await res.json()).account;
       } catch {
         Swal.fire('Address Error!!', 'ネットワークに認識されていないアドレスです').then(removeLoading);
         return;
       }
-      console.log('accountInfo=', account);
 
-      // ── インポータンス計算 ─────────────────────────────────────────────
-      // v3: importance は文字列で返る → BigInt で処理
+      // インポータンス
       let importance = Number(BigInt(account.importance ?? 0)) / TOTAL_CHAIN_IMPORTANCE;
       if (importance > 0) importance = Math.round(importance) / 1000000;
-
       if (importance === 0) {
         removeLoading();
         Swal.fire('Importance Error!!', 'インポータンスが有りません');
+        showResult(false, null, null, null);
         return;
       }
-      dom_importance.innerHTML =
-        `<div style="text-align:center;padding-top:8px">` +
-        `<font color="green">インポータンス<br>${importance} ％</font></div>`;
 
-      // ── サプリメンタル公開鍵の確認 ────────────────────────────────────
       const linked  = account.supplementalPublicKeys?.linked?.publicKey;
       const nodeKey = account.supplementalPublicKeys?.node?.publicKey;
       const vrf     = account.supplementalPublicKeys?.vrf;
 
-      // linked キーなし → ハーベスト設定なし
       if (!linked) {
-        hv_status.innerHTML = '🔴 無効';
+        showResult(false, importance, null, null);
         removeLoading();
         Swal.fire('Link Error!!', '委任先ノードとリンクしていません');
         return;
       }
 
-      // ── 委任アカウント（nodeKey あり）────────────────────────────────
       if (nodeKey) {
-        console.log('==== 委任アカウント ====');
-        await checkDelegation(nodeKey, linked, 'nodePublicKey', hv_status, hv_node);
-        removeLoading();
-        return;
+        await checkDelegation(nodeKey, linked, 'nodePublicKey', importance);
+      } else if (vrf) {
+        await checkDelegation(account.publicKey, linked, 'publicKey', importance);
+      } else {
+        showResult(false, importance, null, null);
+        Swal.fire('Link Error!!', '委任先ノードとリンクしていません');
       }
-
-      // ── ノードオーナーアカウント（vrf あり / nodeKey なし）─────────────
-      if (vrf) {
-        console.log('==== ノードオーナーアカウント ====');
-        await checkDelegation(account.publicKey, linked, 'publicKey', hv_status, hv_node);
-        removeLoading();
-        return;
-      }
-
-      // どちらも無い場合
-      hv_status.innerHTML = '🔴 無効';
       removeLoading();
-      Swal.fire('Link Error!!', '委任先ノードとリンクしていません');
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ハーベスト委任の確認ヘルパー
-    //   searchType: 'nodePublicKey'（委任）| 'publicKey'（ノードオーナー）
-    // ─────────────────────────────────────────────────────────────────────────
-    async function checkDelegation(keyValue, linkedPubKey, searchType, hv_status, hv_node) {
+    async function checkDelegation(keyValue, linkedPubKey, searchType, importance) {
       try {
         const nodeRes = await fetch(`https://symbol.services/nodes/${searchType}/${keyValue}`);
         if (!nodeRes.ok) throw new Error('node not found');
@@ -197,41 +450,34 @@
 
         const unlockRes = await fetch(`https://${nodeData.host}:3001/node/unlockedaccount`);
         if (!unlockRes.ok) throw new Error('unlock fetch failed');
-        const unlockData = await unlockRes.json();
+        const { unlockedAccount } = await unlockRes.json();
 
-        if (unlockData.unlockedAccount.includes(linkedPubKey)) {
-          console.log('有効🟢');
-          hv_status.innerHTML = '🟢 有効';
-          hv_node.innerHTML =
-            `委任先ノード<br>${nodeData.host}<br><br>` +
-            `委任者数<br>${unlockData.unlockedAccount.length}`;
+        if (unlockedAccount.includes(linkedPubKey)) {
+          showResult(true, importance, nodeData.host, unlockedAccount.length);
         } else {
-          console.log('無効🔴');
-          hv_status.innerHTML = '🔴 無効';
+          showResult(false, importance, null, null);
           Swal.fire('Link Error!!', '委任先ノードとリンクしていません');
         }
       } catch (e) {
         console.error('[checkDelegation]', e);
-        hv_status.innerHTML = '🔴 無効';
-        Swal.fire('Fetch Error!!',
-          `委任先ノードが見つかりません\n（停止中またはモバイルノード）`);
+        showResult(false, importance, null, null);
+        Swal.fire('Fetch Error!!', '委任先ノードが見つかりません\n（停止中またはモバイルノード）');
       }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ローディング表示
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── ローディング ───────────────────────────────────────────────────────
     function dispLoading() {
       if ($('#nowLoading_re').length === 0) {
-        $('#kurukuru_re').append("<div id='nowLoading_re'>読み込み中...</div>");
+        $('#kurukuru_re').append(
+          `<div id="nowLoading_re" class="loading-row">
+            <div class="spinner"></div>
+            <span>確認中...</span>
+          </div>`
+        );
       }
     }
-
-    function removeLoading() {
-      $('#nowLoading_re').remove();
-    }
+    function removeLoading() { $('#nowLoading_re').remove(); }
   </script>
-
 </body>
 
 </html>
