@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <title>Harvest Checker</title>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="style.css" type="text/css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="./js/jquery-3.6.3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    body {
+      background-color: rgb(255, 252, 195);
+    }
+    .container_hv {
+      text-align: center;
+      min-height: 100vh;
+      padding-top: 100px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container_hv">
+    <h4>Harvest Checker <br><br>🌾🌾🌾🌾🌾</h4>
+    <br>
+    <input type="text" id="addr" style="font-size: 25px" placeholder="Symbolアドレスを入力" />
+    <br><br><br><br>
+    <button type="button" class="btn-gradient-radius" onclick="harvest_checker();"
+      style="font-size: 30px; cursor: pointer">START</button>
+    <br><br>
+    <div id="kurukuru_re"></div>
+    <br>
+    <div id="hv_status" style="font-size: 30px;"></div>
+    <br>
+    <div id="importance" style="font-size: 30px; font-family: 'Itim', cursive;"></div>
+    <br>
+    <div id="hv_node" style="font-size: 30px; font-family: 'Itim', cursive;"></div>
+    <br><br><br>
+    <div id="version">Powered by SYMBOL<br><a href='https://x.com/mikunNEM'><small>@mikunNEM</small></a></div>
+  </div>
+
+  <script>
+    // ─────────────────────────────────────────────────────────────────────────
+    // 定数
+    // ─────────────────────────────────────────────────────────────────────────
+    const TOTAL_CHAIN_IMPORTANCE = 78429286;
+    let NODE = null;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ノード自動選択（main.js / Mosaic_Viewer.html と同じ方式）
+    //   1. nodewatch.symbol.tools から最大10件ランダム取得
+    //   2. 🇯🇵 日本ノード優先 → isHealthy でフィルタ
+    //   3. ブロック高が最大のノードを選択
+    //   4. /node/health で稼動確認 → unhealthy なら次の候補へ
+    // ─────────────────────────────────────────────────────────────────────────
+    async function getAvailableNode() {
+      const NODEWATCH_URL =
+        'https://nodewatch.symbol.tools/api/symbol/nodes/peer?only_ssl=true&limit=10&order=random';
+
+      const res   = await fetch(NODEWATCH_URL);
+      const nodes = await res.json();
+
+      let pool = nodes.filter(n => n.geoLocation?.country === 'Japan' && n.isHealthy);
+      if (!pool.length) pool = nodes.filter(n => n.isHealthy);
+      pool.sort((a, b) => b.height - a.height);
+
+      if (!pool.length) {
+        Swal.fire('Node Error', '使用可能なノードが見つかりませんでした。');
+        return null;
+      }
+
+      for (const candidate of pool) {
+        const nodeUrl = new URL(candidate.endpoint).origin;
+        try {
+          const healthRes = await fetch(`${nodeUrl}/node/health`);
+          const health    = await healthRes.json();
+          if (health.status?.apiNode === 'up' && health.status?.db === 'up') {
+            console.log('[getAvailableNode] selected:', nodeUrl, '(height:', candidate.height, ')');
+            return nodeUrl;
+          }
+          console.warn('[getAvailableNode] unhealthy, skip:', nodeUrl);
+        } catch (e) {
+          console.warn('[getAvailableNode] health check failed, skip:', nodeUrl, e.message);
+        }
+      }
+
+      Swal.fire('Node Error', '使用可能なノードが見つかりませんでした。');
+      return null;
+    }
+
+    // ページ読み込み時にノードを事前取得
+    (async () => { NODE = await getAvailableNode(); })();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // メイン処理
+    // ─────────────────────────────────────────────────────────────────────────
+    async function harvest_checker() {
+      const hv_status     = document.getElementById('hv_status');
+      const dom_importance = document.getElementById('importance');
+      const hv_node       = document.getElementById('hv_node');
+      hv_status.innerHTML  = '';
+      dom_importance.innerHTML = '';
+      hv_node.innerHTML    = '';
+      dispLoading();
+
+      // ノードが未取得の場合は再取得
+      if (!NODE) {
+        NODE = await getAvailableNode();
+        if (!NODE) { removeLoading(); return; }
+      }
+
+      // アドレス正規化
+      let addr = document.getElementById('addr').value
+        .replace(/-/g, '').replace(/ /g, '').replace(/　/g, '');
+
+      if (addr.length !== 39) {
+        Swal.fire('Address Error!!', '正しい文字数は39文字です').then(removeLoading);
+        return;
+      }
+      if (addr.charAt(0) !== 'N') {
+        Swal.fire('Address Error!!', 'メインネットアドレスの先頭は「N」です').then(removeLoading);
+        return;
+      }
+
+      // ── アカウント情報取得（v3: GET /accounts/{address}）────────────────
+      let account;
+      try {
+        const res  = await fetch(`${NODE}/accounts/${addr}`);
+        if (!res.ok) throw new Error(res.status);
+        const json = await res.json();
+        account    = json.account;
+      } catch {
+        Swal.fire('Address Error!!', 'ネットワークに認識されていないアドレスです').then(removeLoading);
+        return;
+      }
+      console.log('accountInfo=', account);
+
+      // ── インポータンス計算 ─────────────────────────────────────────────
+      // v3: importance は文字列で返る → BigInt で処理
+      let importance = Number(BigInt(account.importance ?? 0)) / TOTAL_CHAIN_IMPORTANCE;
+      if (importance > 0) importance = Math.round(importance) / 1000000;
+
+      if (importance === 0) {
+        removeLoading();
+        Swal.fire('Importance Error!!', 'インポータンスが有りません');
+        return;
+      }
+      dom_importance.innerHTML =
+        `<div style="text-align:center;padding-top:8px">` +
+        `<font color="green">インポータンス<br>${importance} ％</font></div>`;
+
+      // ── サプリメンタル公開鍵の確認 ────────────────────────────────────
+      const linked  = account.supplementalPublicKeys?.linked?.publicKey;
+      const nodeKey = account.supplementalPublicKeys?.node?.publicKey;
+      const vrf     = account.supplementalPublicKeys?.vrf;
+
+      // linked キーなし → ハーベスト設定なし
+      if (!linked) {
+        hv_status.innerHTML = '🔴 無効';
+        removeLoading();
+        Swal.fire('Link Error!!', '委任先ノードとリンクしていません');
+        return;
+      }
+
+      // ── 委任アカウント（nodeKey あり）────────────────────────────────
+      if (nodeKey) {
+        console.log('==== 委任アカウント ====');
+        await checkDelegation(nodeKey, linked, 'nodePublicKey', hv_status, hv_node);
+        removeLoading();
+        return;
+      }
+
+      // ── ノードオーナーアカウント（vrf あり / nodeKey なし）─────────────
+      if (vrf) {
+        console.log('==== ノードオーナーアカウント ====');
+        await checkDelegation(account.publicKey, linked, 'publicKey', hv_status, hv_node);
+        removeLoading();
+        return;
+      }
+
+      // どちらも無い場合
+      hv_status.innerHTML = '🔴 無効';
+      removeLoading();
+      Swal.fire('Link Error!!', '委任先ノードとリンクしていません');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ハーベスト委任の確認ヘルパー
+    //   searchType: 'nodePublicKey'（委任）| 'publicKey'（ノードオーナー）
+    // ─────────────────────────────────────────────────────────────────────────
+    async function checkDelegation(keyValue, linkedPubKey, searchType, hv_status, hv_node) {
+      try {
+        const nodeRes = await fetch(`https://symbol.services/nodes/${searchType}/${keyValue}`);
+        if (!nodeRes.ok) throw new Error('node not found');
+        const nodeData = await nodeRes.json();
+
+        const unlockRes = await fetch(`https://${nodeData.host}:3001/node/unlockedaccount`);
+        if (!unlockRes.ok) throw new Error('unlock fetch failed');
+        const unlockData = await unlockRes.json();
+
+        if (unlockData.unlockedAccount.includes(linkedPubKey)) {
+          console.log('有効🟢');
+          hv_status.innerHTML = '🟢 有効';
+          hv_node.innerHTML =
+            `委任先ノード<br>${nodeData.host}<br><br>` +
+            `委任者数<br>${unlockData.unlockedAccount.length}`;
+        } else {
+          console.log('無効🔴');
+          hv_status.innerHTML = '🔴 無効';
+          Swal.fire('Link Error!!', '委任先ノードとリンクしていません');
+        }
+      } catch (e) {
+        console.error('[checkDelegation]', e);
+        hv_status.innerHTML = '🔴 無効';
+        Swal.fire('Fetch Error!!',
+          `委任先ノードが見つかりません\n（停止中またはモバイルノード）`);
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ローディング表示
+    // ─────────────────────────────────────────────────────────────────────────
+    function dispLoading() {
+      if ($('#nowLoading_re').length === 0) {
+        $('#kurukuru_re').append("<div id='nowLoading_re'>読み込み中...</div>");
+      }
+    }
+
+    function removeLoading() {
+      $('#nowLoading_re').remove();
+    }
+  </script>
+
+</body>
+
+</html>
