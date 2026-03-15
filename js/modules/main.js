@@ -626,9 +626,9 @@ function _decodeMsgPayload(msgPayload) {
     }
     let text = '';
     if (msgHex) {
-        // 0xFE = 委任ハーベスト(PersistentDelegationRequest)バイナリ → hex表示
+        // 0xFE = 委任ハーベスト(PersistentDelegationRequest)バイナリ → FE+hex表示
         if (msgType === 0xFE) {
-            text = `[HEX] ${msgHex.toUpperCase()}`;
+            text = `[HEX] FE${msgHex.toUpperCase()}`;
         } else {
             try {
                 const bytes = new Uint8Array(msgHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
