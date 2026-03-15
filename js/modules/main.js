@@ -2359,11 +2359,22 @@ async function select_Page_mosa1() {
             try {
                 const namesData = await getMosaicsNames(mosaicIds);
                 for (const n of (namesData ?? [])) {
-                    const firstName = (n.names ?? [])[0] ?? '';
-                    if (firstName) nameMap[(n.mosaicId ?? '').toUpperCase()] = firstName;
+                    // names[0] はオブジェクト {name:"..."} または文字列
+                    const raw = (n.names ?? [])[0];
+                    const resolved = raw ? (typeof raw === 'object' ? raw.name : raw) : null;
+                    if (resolved) nameMap[(n.mosaicId ?? '').toUpperCase()] = resolved;
                 }
             } catch {}
         }
+
+        // アカウント保有量マップ（実際の残高）
+        let holdingsMap = {}; // mosaicId.upper -> amount(string)
+        try {
+            const accData = await getAccountInfo(addr);
+            for (const mo of (accData?.mosaics ?? [])) {
+                holdingsMap[mo.id.toUpperCase()] = mo.amount;
+            }
+        } catch {}
 
         // テーブル構築
         const tbl = document.createElement('table');
@@ -2388,8 +2399,9 @@ async function select_Page_mosa1() {
             const div = m.divisibility ?? 0;
             const supplyDisp = (supply / Math.pow(10, div)).toLocaleString();
 
-            // アカウント残高は別途取得が必要なため supply で代用
-            const balanceDisp = supplyDisp;
+            // 実際のアカウント保有量を使用（保有していない場合は 0）
+            const heldAmt = BigInt(holdingsMap[mId] ?? 0);
+            const balanceDisp = (Number(heldAmt) / Math.pow(10, div)).toLocaleString();
 
             // 有効期限
             const dur = Number(m.duration ?? 0);
