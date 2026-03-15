@@ -1,3 +1,13 @@
 .DS_Store
 .localized
 src/.DS_Store
+
+# ── v2専用ファイル（v3では不使用）────────────────────────────────
+script.js          # v2版メインスクリプト
+dist/              # v2 Symbol SDK バンドル
+test.html          # テスト用
+xembook.html
+xembook.js
+3dload.php         # NFTDrive 3Dロード用PHP
+HV_Checker
+HV_Checker.html
