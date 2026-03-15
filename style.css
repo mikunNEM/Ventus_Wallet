@@ -243,8 +243,6 @@ h4 {
   position: fixed;
   height: 100vh;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
 }
 
 @media screen and (max-width:  480px) {
@@ -333,11 +331,10 @@ button.accountInfo{
 .sender-card {
   background: rgb(255, 255, 255,0.8);
   border-radius: 16px;
-  margin: 16px 16px 16px 16px;
+  margin: 16px 16px 0px 16px;
   padding: 16px 36px 36px 36px;
   color: #2f4f4f;
   box-shadow: 5px 5px 5px rgb(102, 113, 102);
-  flex: 1;
 }
 
 .sender-card #agg_button {
@@ -510,6 +507,7 @@ input[type="file"] {
   border-radius: 16px;
   width: 730px;
   margin-left: 750px;
+  margin-top: 40px;
   padding: 32px 32px 32px 32px;
   box-shadow: 5px 5px 5px rgb(102, 113, 102);
 }
