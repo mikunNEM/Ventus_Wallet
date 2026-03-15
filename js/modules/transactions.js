@@ -371,8 +371,8 @@ export function buildMosaicSupplyChangeTx(mosaicIdHex, delta, action, signerPubK
 
     const descriptor = new sdkSymbol.descriptors.MosaicSupplyChangeTransactionV1Descriptor(
         new sdkSymbol.models.UnresolvedMosaicId(BigInt('0x' + mosaicIdHex)),
-        actionModel,
-        new sdkSymbol.models.Amount(BigInt(delta))
+        new sdkSymbol.models.Amount(BigInt(delta)),
+        actionModel
     );
     return facade.createTransactionFromTypedDescriptor(descriptor, signerPubKey, feeMultiplier, DEADLINE_SEC);
 }

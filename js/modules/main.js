@@ -393,6 +393,10 @@ async function initAccountDisplay(accountData) {
 
     const sel1 = buildSelect(document.querySelector('.form-mosaic_ID'), 'select_m1');
     const sel2 = buildSelect(document.querySelector('.mosaic_ID2'), 'select_m1');
+    // 供給量変更ダイアログ用セレクト
+    const selSup = buildSelect(document.querySelector('.select_mosaic_sup'), 'select_sup');
+    // 回収ダイアログ用セレクト
+    const selRev = buildSelect(document.querySelector('.revoke_select'), 'select_r');
 
     // 保有量・期限切れを更新する関数
     const updateHoyu = async (mosaicIdHex) => {
