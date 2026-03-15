@@ -374,14 +374,19 @@ async function initAccountDisplay(accountData) {
         return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
     });
 
-    // セレクトボックスを生成して .form-mosaic_ID に追加（既存のセレクトは削除）
-    const buildSelect = (container, cssClass) => {
+    // セレクトボックスを生成（リストを引数で受け取る汎用版）
+    const buildSelect = (container, cssClass, list) => {
         if (!container) return null;
-        // 既存のselectを削除
         container.querySelectorAll('select').forEach(s => s.remove());
         const sel = document.createElement('select');
         sel.classList.add(cssClass);
-        for (const m of selectMosaics) {
+        if (list.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = '--- 対象なし ---';
+            sel.appendChild(opt);
+        }
+        for (const m of list) {
             const opt = document.createElement('option');
             opt.value = m.id;
             opt.textContent = m.name;
@@ -391,12 +396,29 @@ async function initAccountDisplay(accountData) {
         return sel;
     };
 
-    const sel1 = buildSelect(document.querySelector('.form-mosaic_ID'), 'select_m1');
-    const sel2 = buildSelect(document.querySelector('.mosaic_ID2'), 'select_m1');
-    // 供給量変更ダイアログ用セレクト
-    const selSup = buildSelect(document.querySelector('.select_mosaic_sup'), 'select_sup');
-    // 回収ダイアログ用セレクト
-    const selRev = buildSelect(document.querySelector('.revoke_select'), 'select_r');
+    const sel1 = buildSelect(document.querySelector('.form-mosaic_ID'), 'select_m1', selectMosaics);
+    const sel2 = buildSelect(document.querySelector('.mosaic_ID2'), 'select_m1', selectMosaics);
+
+    // 供給量変更・回収ダイアログ用：モザイク情報を並列取得してフラグでフィルタ
+    // Symbol mosaic flags: bit0=supplyMutable, bit1=transferable, bit2=restrictable, bit3=revokable
+    const mosaicInfoList = await Promise.all(
+        selectMosaics.map(async m => {
+            try {
+                const info = await getMosaicInfoCached(m.id);
+                const flags = Number(info.moInfo.flags ?? 0);
+                return { ...m, supplyMutable: !!(flags & 1), revokable: !!(flags & 8) };
+            } catch {
+                return { ...m, supplyMutable: false, revokable: false };
+            }
+        })
+    );
+    const supplyMutableMosaics = mosaicInfoList.filter(m => m.supplyMutable);
+    const revokableMosaics     = mosaicInfoList.filter(m => m.revokable);
+
+    // 供給量変更ダイアログ用セレクト（supplyMutable のみ）
+    const selSup = buildSelect(document.querySelector('.select_mosaic_sup'), 'select_sup', supplyMutableMosaics);
+    // 回収ダイアログ用セレクト（revokable のみ）
+    const selRev = buildSelect(document.querySelector('.revoke_select'), 'select_r', revokableMosaics);
 
     // 保有量・期限切れを更新する関数
     const updateHoyu = async (mosaicIdHex) => {
