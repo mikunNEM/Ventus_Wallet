@@ -148,32 +148,35 @@ function transaction_info(url) {
 
 function getTransactionType(type) {
     const types = {
-        16724: 'TRANSFER',
-        16718: 'NAMESPACE_REGISTRATION',
-        16974: 'ADDRESS_ALIAS',
-        17230: 'MOSAIC_ALIAS',
-        16717: 'MOSAIC_DEFINITION',
-        16973: 'MOSAIC_SUPPLY_CHANGE',
-        17229: 'MOSAIC_SUPPLY_REVOCATION',
-        16725: 'MULTISIG_ACCOUNT_MODIFICATION',
-        16712: 'HASH_LOCK',
-        16720: 'SECRET_LOCK',
-        16976: 'SECRET_PROOF',
-        16708: 'ACCOUNT_ADDRESS_RESTRICTION',
-        16964: 'ACCOUNT_MOSAIC_RESTRICTION',
-        17220: 'ACCOUNT_OPERATION_RESTRICTION',
-        16716: 'ACCOUNT_KEY_LINK',   // 0x414C
-        16963: 'VRF_KEY_LINK',       // 0x4243
-        16972: 'NODE_KEY_LINK',      // 0x424C ← 修正（旧: MOSAIC_GLOBAL_RESTRICTION）
-        16721: 'MOSAIC_GLOBAL_RESTRICTION',   // 0x4151
-        16728: 'MOSAIC_ADDRESS_RESTRICTION',
-        16707: 'ACCOUNT_METADATA',
-        17219: 'NAMESPACE_METADATA',
-        16705: 'AGGREGATE_COMPLETE',
-        16961: 'AGGREGATE_BONDED',
+        16705: 'AGGREGATE_COMPLETE',              // 0x4141
+        16961: 'AGGREGATE_BONDED',               // 0x4241
+        16724: 'TRANSFER',                        // 0x4154
+        16718: 'NAMESPACE_REGISTRATION',          // 0x414E
+        16974: 'ADDRESS_ALIAS',                   // 0x424E
+        17230: 'MOSAIC_ALIAS',                    // 0x434E
+        16717: 'MOSAIC_DEFINITION',               // 0x414D
+        16973: 'MOSAIC_SUPPLY_CHANGE',            // 0x424D
+        17229: 'MOSAIC_SUPPLY_REVOCATION',        // 0x434D
+        16725: 'MULTISIG_ACCOUNT_MODIFICATION',   // 0x4155
+        16712: 'HASH_LOCK',                       // 0x4148
+        16720: 'SECRET_LOCK',                     // 0x4150
+        16976: 'SECRET_PROOF',                    // 0x4250
+        16708: 'ACCOUNT_ADDRESS_RESTRICTION',     // 0x4144
+        17232: 'ACCOUNT_MOSAIC_RESTRICTION',      // 0x4350
+        17220: 'ACCOUNT_OPERATION_RESTRICTION',   // 0x4344
+        16721: 'MOSAIC_GLOBAL_RESTRICTION',       // 0x4151
+        16728: 'MOSAIC_ADDRESS_RESTRICTION',      // 0x4158
+        16716: 'ACCOUNT_KEY_LINK',                // 0x414C
+        16963: 'VRF_KEY_LINK',                    // 0x4243
+        16972: 'NODE_KEY_LINK',                   // 0x424C
+        16707: 'ACCOUNT_METADATA',                // 0x4143
+        16964: 'MOSAIC_METADATA',                 // 0x4244 ✅（旧マッピングではACCOUNT_MOSAIC_RESTRICTIONと誤記）
+        17219: 'NAMESPACE_METADATA',              // 0x4343
     };
     return types[type] || `TYPE_${type}`;
 }
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ノード取得（v2の getActiveNode と同等）
@@ -1152,7 +1155,10 @@ async function main() {
     window.revoke_mosaic = () => revoke_mosaic(activeAddress);
     window.Onclick_Namespace = () => Onclick_Namespace();
     window.Onclick_subNamespace = () => Onclick_subNamespace();
+    window.load_root_namespaces = () => load_root_namespaces();
+    window.load_alias_namespaces = () => load_alias_namespaces();
     window.alias_Link = () => alias_Link();
+    window.alias_type_change = () => alias_type_change();
     window.Metadata = () => Metadata(activeAddress);
     window.Msig_account = () => Msig_account(activeAddress);
     window.handleSSS_multisig = () => handleSSS_multisig(activeAddress);
@@ -1208,7 +1214,10 @@ async function initAccountAndUI() {
     window.revoke_mosaic = () => revoke_mosaic(addr);
     window.Onclick_Namespace = () => Onclick_Namespace();
     window.Onclick_subNamespace = () => Onclick_subNamespace();
+    window.load_root_namespaces = () => load_root_namespaces();
+    window.load_alias_namespaces = () => load_alias_namespaces();
     window.alias_Link = () => alias_Link();
+    window.alias_type_change = () => alias_type_change();
     window.Metadata = () => Metadata(addr);
     window.Msig_account = () => Msig_account(addr);
     window.handleSSS_multisig = () => handleSSS_multisig(addr);
@@ -1599,26 +1608,152 @@ async function Onclick_Namespace() {
 // サブネームスペース登録
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ルートNSセレクトを動的生成する関数
+async function load_root_namespaces() {
+    const area = document.getElementById('rootNamespace_area');
+    if (!area) return;
+    const addr = window.SSS?.activeAddress;
+    if (!addr) {
+        area.innerHTML = '<span style="color:#aaa;font-size:12px;">ウォレット未接続</span>';
+        return;
+    }
+    area.innerHTML = '<span style="color:#aaa;font-size:12px;">読み込み中...</span>';
+    try {
+        const res = await fetchJson(new URL(
+            `/namespaces?ownerAddress=${addr}&pageSize=100&order=desc`, NODE
+        ));
+        const namespaces = res.data ?? [];
+
+        if (namespaces.length === 0) {
+            area.innerHTML = '<span style="color:#aaa;font-size:12px;">所有ネームスペースなし</span>';
+            return;
+        }
+
+        // NSフルネームを解決
+        const allNsIds = [];
+        for (const entry of namespaces) {
+            const ns = entry.namespace ?? entry;
+            for (const lv of ['level0', 'level1', 'level2']) {
+                if (ns[lv]) allNsIds.push(ns[lv]);
+            }
+        }
+        let nsNameMap = {};
+        if (allNsIds.length > 0) {
+            try {
+                const names = await fetchJson(new URL('/namespaces/names', NODE), 'POST',
+                    { namespaceIds: [...new Set(allNsIds)] });
+                const nameList = Array.isArray(names) ? names : (names.namespaceNames ?? []);
+                for (const n of nameList) {
+                    nsNameMap[(n.id ?? '').toUpperCase()] = n.name;
+                }
+            } catch { /* 名前取得失敗は無視 */ }
+        }
+
+        const sel = document.createElement('select');
+        sel.id = 'rootNamespace';
+        sel.style.cssText = 'width:100%;padding:6px;border-radius:6px;font-size:13px;box-sizing:border-box;';
+        for (const entry of namespaces) {
+            const ns = entry.namespace ?? entry;
+            const nsDeepId = (ns.level2 ?? ns.level1 ?? ns.level0 ?? '').toUpperCase();
+            const lvParts = ['level0', 'level1', 'level2']
+                .map(lv => ns[lv] ? nsNameMap[ns[lv].toUpperCase()] : null)
+                .filter(Boolean);
+            const fullName = lvParts.join('.');
+            if (!fullName) continue;
+            const opt = document.createElement('option');
+            opt.value = fullName;    // value = "mikun" or "mikun.tomato"
+            opt.textContent = fullName;
+            sel.appendChild(opt);
+        }
+        area.innerHTML = '';
+        area.appendChild(sel);
+    } catch (e) {
+        console.error('[load_root_namespaces]', e);
+        area.innerHTML = `<span style="color:red;font-size:12px;">エラー: ${e.message}</span>`;
+    }
+}
+
+// エイリアスリンクのネームスペースセレクトを動的生成
+async function load_alias_namespaces() {
+    const container = document.querySelector('.Namespace_select');
+    if (!container) return;
+    const addr = window.SSS?.activeAddress;
+    if (!addr) {
+        container.innerHTML = '<span style="color:#aaa;font-size:12px;">ウォレット未接続</span>';
+        return;
+    }
+    container.innerHTML = '<span style="color:#aaa;font-size:12px;">読み込み中...</span>';
+    try {
+        const res = await fetchJson(new URL(
+            `/namespaces?ownerAddress=${addr}&pageSize=100&order=desc`, NODE
+        ));
+        const namespaces = res.data ?? [];
+        if (namespaces.length === 0) {
+            container.innerHTML = '<span style="color:#aaa;font-size:12px;">所有ネームスペースなし</span>';
+            return;
+        }
+        const allNsIds = [];
+        for (const entry of namespaces) {
+            const ns = entry.namespace ?? entry;
+            for (const lv of ['level0', 'level1', 'level2']) {
+                if (ns[lv]) allNsIds.push(ns[lv]);
+            }
+        }
+        let nsNameMap = {};
+        if (allNsIds.length > 0) {
+            try {
+                const names = await fetchJson(new URL('/namespaces/names', NODE), 'POST',
+                    { namespaceIds: [...new Set(allNsIds)] });
+                const nameList = Array.isArray(names) ? names : (names.namespaceNames ?? []);
+                for (const n of nameList) nsNameMap[(n.id ?? '').toUpperCase()] = n.name;
+            } catch { /* 名前取得失敗は無視 */ }
+        }
+        const sel = document.createElement('select');
+        sel.className = 'Form-Item-Input_L alias_ns_select';
+        sel.style.cssText = 'width:100%;padding:6px;border-radius:6px;font-size:13px;';
+        for (const entry of namespaces) {
+            const ns = entry.namespace ?? entry;
+            const lvParts = ['level0', 'level1', 'level2']
+                .map(lv => ns[lv] ? nsNameMap[ns[lv].toUpperCase()] : null)
+                .filter(Boolean);
+            const fullName = lvParts.join('.');
+            if (!fullName) continue;
+            const opt = document.createElement('option');
+            opt.value = fullName;
+            opt.textContent = fullName;
+            sel.appendChild(opt);
+        }
+        container.innerHTML = '';
+        container.appendChild(sel);
+    } catch (e) {
+        console.error('[load_alias_namespaces]', e);
+        container.innerHTML = `<span style="color:red;font-size:12px;">エラー: ${e.message}</span>`;
+    }
+}
+
 async function Onclick_subNamespace() {
     const subName = (document.getElementById('subNamespace')?.value ?? '').trim().toLowerCase();
-    const parentName = (document.getElementById('parentNamespace')?.value ?? '').trim().toLowerCase();
+    // rootNamespace_area内のselectのvalue（フルネーム: "mikun" or "mikun.tomato"）
+    const parentFullName = (document.getElementById('rootNamespace')?.value ?? '').trim().toLowerCase();
     const signerPubKey = window.SSS.activePublicKey;
 
-    if (!subName || !parentName) {
+    if (!subName || !parentFullName) {
         Swal.fire({ title: 'ネームスペース名を入力してください。', icon: 'warning' }); return;
     }
 
     try {
-        // 親NSのIDを取得する
-        const res = await fetchJson(new URL(
-            `/namespaces?level0=${encodeURIComponent(parentName)}&pageSize=1`, NODE
-        ));
-        if (!res.data || res.data.length === 0) {
+        // generateNamespacePathで親NSのIDを生成（APIクエリ不要）
+        const parentPath = sdkSymbol.generateNamespacePath(parentFullName);
+        const parentIdBigInt = parentPath[parentPath.length - 1];
+        const parentIdHex = parentIdBigInt.toString(16).toUpperCase();
+
+        // APIで親NSが実在するか確認
+        const nsInfo = await fetchJson(new URL(`/namespaces/${parentIdHex}`, NODE));
+        if (!nsInfo.namespace) {
             Swal.fire({ title: '親ネームスペースが見つかりません。', icon: 'warning' }); return;
         }
-        const parentId = res.data[0].namespace.id;
 
-        const tx = buildSubNamespaceTx(subName, parentId, signerPubKey);
+        const tx = buildSubNamespaceTx(subName, parentIdHex, signerPubKey);
         const feeXym = Number(tx.fee.value) / 1_000_000;
         const feeEl = document.getElementById('fee_sn');
         if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM</p>`;
@@ -1631,15 +1766,71 @@ async function Onclick_subNamespace() {
     }
 }
 
+
 // ─────────────────────────────────────────────────────────────────────────────
 // エイリアスリンク
 // ─────────────────────────────────────────────────────────────────────────────
 
+async function alias_type_change() {
+    const typeVal = document.getElementById('alias_type')?.value ?? '0';
+    const area = document.getElementById('alias_input_area');
+    if (!area) return;
+    const addr = window.SSS?.activeAddress;
+
+    if (typeVal === '0' || typeVal === '2') {
+        // ── アドレス: 自分のアドレスを自動入力 ──
+        area.innerHTML = `<input type="text" class="Form-Item-Input_L" id="alias_address"
+            value="${addr ?? ''}" placeholder="${addr ?? ''}" />`;
+    } else {
+        // ── モザイク: 自身が作成したモザイクをセレクト表示 ──
+        area.innerHTML = '<span style="color:#aaa;font-size:12px;">読み込み中...</span>';
+        try {
+            const res = await fetchJson(new URL(
+                `/mosaics?ownerAddress=${addr}&pageSize=100`, NODE
+            ));
+            const mosaics = res.data ?? [];
+            if (mosaics.length === 0) {
+                area.innerHTML = '<span style="color:#aaa;font-size:12px;">作成済みモザイクなし</span>';
+                return;
+            }
+            // モザイク名を一括取得
+            const ids = mosaics.map(m => m.mosaic?.id ?? m.id);
+            let nameMap = {};
+            try {
+                const namesRes = await getMosaicsNames(ids);
+                for (const entry of (namesRes ?? [])) {
+                    const n = entry.names?.[0];
+                    nameMap[(entry.mosaicId ?? '').toUpperCase()] =
+                        (n && typeof n === 'object') ? n.name : (n ?? null);
+                }
+            } catch { /* 名前取得失敗は無視 */ }
+
+            const sel = document.createElement('select');
+            sel.className = 'Form-Item-Input_L select_alias_mosaic';
+            for (const entry of mosaics) {
+                const mosaicId = (entry.mosaic?.id ?? entry.id ?? '').toUpperCase();
+                const name = nameMap[mosaicId] ?? null;
+                const opt = document.createElement('option');
+                opt.value = mosaicId;
+                opt.textContent = name ? `${name} (${mosaicId})` : mosaicId;
+                sel.appendChild(opt);
+            }
+            area.innerHTML = '';
+            area.appendChild(sel);
+        } catch (e) {
+            console.error('[alias_type_change]', e);
+            area.innerHTML = `<span style="color:red;font-size:12px;">エラー: ${e.message}</span>`;
+        }
+    }
+}
+
 async function alias_Link() {
-    const linkType = document.getElementById('alias_type')?.value ?? 'address'; // 'address' or 'mosaic'
-    const isLink = document.getElementById('alias_link_check')?.checked ?? true;
-    const action = isLink ? 'link' : 'unlink';
-    const nsName = (document.getElementById('alias_namespace')?.value ?? '').trim().toLowerCase();
+    const typeVal  = document.getElementById('alias_type')?.value ?? '0';
+    const isAddress = typeVal === '0' || typeVal === '2';
+    const action   = (typeVal === '0' || typeVal === '1') ? 'link' : 'unlink';
+    const nsName = (document.querySelector('.Namespace_select select')?.value
+                  ?? document.querySelector('.Namespace_select option:first-child')?.value
+                  ?? '').trim().toLowerCase();
     const signerPubKey = window.SSS.activePublicKey;
 
     if (!nsName) {
@@ -1647,28 +1838,29 @@ async function alias_Link() {
     }
 
     try {
-        // NSのIDを取得する
-        const res = await fetchJson(new URL(
-            `/namespaces?level0=${encodeURIComponent(nsName)}&pageSize=1`, NODE
-        ));
-        if (!res.data || res.data.length === 0) {
+        // NS名からIDを生成してRestAPIで確認 (06_namespace.md 方式)
+        const nsPath = sdkSymbol.generateNamespacePath(nsName);
+        const nsHexId = nsPath[nsPath.length - 1].toString(16).toUpperCase();
+        const nsInfo = await fetchJson(new URL(`/namespaces/${nsHexId}`, NODE));
+        if (!nsInfo.namespace) {
             Swal.fire({ title: 'ネームスペースが見つかりません。', icon: 'warning' }); return;
         }
-        const nsId = res.data[0].namespace.id;
+        // nsPath[last]はBigIntのまま使用
+        const nsBigInt = nsPath[nsPath.length - 1];
 
         let tx;
-        if (linkType === 'address') {
+        if (isAddress) {
             const address = (document.getElementById('alias_address')?.value ?? '').trim();
             if (!address) {
                 Swal.fire({ title: 'アドレスを入力してください。', icon: 'warning' }); return;
             }
-            tx = buildAddressAliasTx(action, nsId, address, signerPubKey);
+            tx = buildAddressAliasTx(action, nsBigInt, address, signerPubKey);
         } else {
             const mosaicIdHex = document.querySelector('.select_alias_mosaic')?.value ?? '';
             if (!mosaicIdHex) {
                 Swal.fire({ title: 'モザイクを選択してください。', icon: 'warning' }); return;
             }
-            tx = buildMosaicAliasTx(action, nsId, mosaicIdHex, signerPubKey);
+            tx = buildMosaicAliasTx(action, nsBigInt, BigInt('0x' + mosaicIdHex), signerPubKey);
         }
 
         const feeXym = Number(tx.fee.value) / 1_000_000;
@@ -1680,6 +1872,7 @@ async function alias_Link() {
     } catch (e) {
         console.error('[alias_Link]', e);
         Swal.fire({ title: 'エイリアスリンク失敗', text: e.message, icon: 'error' });
+
     }
 }
 
@@ -1688,20 +1881,20 @@ async function alias_Link() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function Metadata(activeAddress) {
-    const metaKeyStr = (document.getElementById('Meta_key')?.value ?? '').trim();
+    const metaKeyStr = (document.querySelector('.select_Meta_key')?.value ?? document.getElementById('Meta_key')?.value ?? '').trim();
     const metaValue = (document.getElementById('Meta_value')?.value ?? '').trim();
-    const metaType = Number(document.querySelector('.select_Meta')?.value ?? 0); // 0=Account, 1=Mosaic, 2=NS
+    const metaType = Number(document.getElementById('Meta_type')?.value ?? -1); // -1=未選択, 0=Account, 1=Mosaic, 2=NS
     const signerPubKey = window.SSS.activePublicKey;
 
-    if (!metaKeyStr) {
-        Swal.fire({ title: 'メタデータキーを入力してください。', icon: 'warning' }); return;
-    }
+    // 「新規入力」選択時（空文字）はランダムなキーワードから自動生成
+    const effectiveKeyStr = metaKeyStr || Math.random().toString(36).slice(2);
+
     if (!metaValue) {
         Swal.fire({ title: 'メタデータ値を入力してください。', icon: 'warning' }); return;
     }
 
     try {
-        const key = sdkSymbol.metadataGenerateKey(metaKeyStr);
+        const key = sdkSymbol.metadataGenerateKey(effectiveKeyStr);
         const newValue = new TextEncoder().encode(metaValue);
 
         // 既存のメタデータを取得して差分計算
@@ -1710,7 +1903,7 @@ async function Metadata(activeAddress) {
         try {
             const existRes = await fetchJson(new URL(`/metadata?${new URLSearchParams(params)}`, NODE));
             if (existRes.data && existRes.data.length > 0) {
-                oldValue = new TextEncoder().encode(existRes.data[0].metadataEntry.value);
+                oldValue = sdkCore.utils.hexToUint8(existRes.data[0].metadataEntry.value);
             }
         } catch { }
 
@@ -2676,7 +2869,7 @@ async function select_Page_meta() {
         // ── セレクトボックスにメタデータキーを追加 ──
         if (metaSel && metas.length > 0) {
             const sel = document.createElement('select');
-            sel.className = 'select_Meta';
+            sel.className = 'select_Meta_key';
             sel.style.cssText = 'width:100%;padding:6px;border-radius:6px;font-family:monospace;';
             const defOpt = document.createElement('option');
             defOpt.value = '';
@@ -2690,7 +2883,7 @@ async function select_Page_meta() {
                 opt.textContent = key;
                 sel.appendChild(opt);
             });
-            // 選択時に Meta_key へ自動入力
+            // 選択時に Meta_key へ自動入力（inputがあれば同期）
             sel.addEventListener('change', () => {
                 const keyEl = document.getElementById('Meta_key');
                 if (keyEl) keyEl.value = sel.value;
@@ -2961,11 +3154,12 @@ async function feeCalc() {
 // Metadata種別UI切り替え
 // =============================================================================
 
-function MetaKey_select() {
+async function MetaKey_select() {
     const metaType = document.getElementById('Meta_type')?.value ?? '';
     const domAddress = document.getElementById('meta_address');
     const domMosaic = document.getElementById('meta_mosaic');
     const domNamespace = document.getElementById('meta_namespace');
+    const addr = window.SSS?.activeAddress;
 
     if (metaType === '0') {
         if (domMosaic) domMosaic.style.display = 'none';
@@ -2974,16 +3168,99 @@ function MetaKey_select() {
             <div class="Form-Item_Meta">
             <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Meta">Address</span></p>
             <input type="text" class="Form-Item-Input_Meta" id="Meta_address_input"
-                   placeholder="${window.SSS?.activeAddress ?? ''}" />
+                   placeholder="${addr ?? ''}" />
             </div>`;
+
     } else if (metaType === '1') {
+        // ── Mosaic: 自身が作成したモザイクをセレクトに表示 ──
         if (domAddress) domAddress.innerHTML = '';
         if (domMosaic) domMosaic.style.display = 'flex';
         if (domNamespace) domNamespace.style.display = 'none';
+
+        const mosaicContainer = domMosaic?.querySelector('.select_mosaicID');
+        if (mosaicContainer && addr) {
+            mosaicContainer.innerHTML = '<span style="color:#aaa;font-size:12px;">読み込み中...</span>';
+            try {
+                const res = await fetchJson(new URL(
+                    `/mosaics?ownerAddress=${addr}&pageSize=100`, NODE
+                ));
+                const mosaics = res.data ?? [];
+
+                if (mosaics.length === 0) {
+                    mosaicContainer.innerHTML = '<span style="color:#aaa;font-size:12px;">作成済みモザイクなし</span>';
+                } else {
+                    const ids = mosaics.map(m => m.mosaic?.id ?? m.id);
+                    let nameMap = {};
+                    try {
+                        const namesRes = await getMosaicsNames(ids);
+                        for (const entry of (namesRes ?? [])) {
+                            const n = entry.names?.[0];
+                            nameMap[(entry.mosaicId ?? '').toUpperCase()] =
+                                (n && typeof n === 'object') ? n.name : (n ?? null);
+                        }
+                    } catch { /* 名前取得失敗は無視 */ }
+
+                    const sel = document.createElement('select');
+                    sel.className = 'select_Meta_mosaic';
+                    sel.style.cssText = 'width:100%;padding:6px;border-radius:6px;font-size:13px;';
+                    for (const entry of mosaics) {
+                        const mosaicId = (entry.mosaic?.id ?? entry.id ?? '').toUpperCase();
+                        const name = nameMap[mosaicId] ?? null;
+                        const opt = document.createElement('option');
+                        opt.value = mosaicId;
+                        opt.textContent = name ? `${name} (${mosaicId})` : mosaicId;
+                        sel.appendChild(opt);
+                    }
+                    mosaicContainer.innerHTML = '';
+                    mosaicContainer.appendChild(sel);
+                }
+            } catch (e) {
+                console.error('[MetaKey_select] mosaic fetch error', e);
+                mosaicContainer.innerHTML = `<span style="color:red;font-size:12px;">エラー: ${e.message}</span>`;
+            }
+        }
+
     } else if (metaType === '2') {
+        // ── Namespace: 自身が所有するNSをセレクトに表示 ──
         if (domAddress) domAddress.innerHTML = '';
         if (domMosaic) domMosaic.style.display = 'none';
         if (domNamespace) domNamespace.style.display = 'flex';
+
+        const nsContainer = domNamespace?.querySelector('.Namespace_select_N');
+        if (nsContainer && addr) {
+            nsContainer.innerHTML = '<span style="color:#aaa;font-size:12px;">読み込み中...</span>';
+            try {
+                const res = await fetchJson(new URL(
+                    `/namespaces?ownerAddress=${addr}&pageSize=100`, NODE
+                ));
+                const namespaces = res.data ?? [];
+
+                if (namespaces.length === 0) {
+                    nsContainer.innerHTML = '<span style="color:#aaa;font-size:12px;">所有ネームスペースなし</span>';
+                } else {
+                    const sel = document.createElement('select');
+                    sel.className = 'select_Meta_ns';
+                    sel.style.cssText = 'width:100%;padding:6px;border-radius:6px;font-size:13px;';
+                    for (const entry of namespaces) {
+                        const ns = entry.namespace ?? entry;
+                        const nsId = ns.id ?? '';
+                        // フルネームを組み立て (level0[.level1[.level2]])
+                        const levels = [ns.name, ns.level1, ns.level2].filter(Boolean);
+                        const fullName = levels.length > 0 ? levels.join('.') : nsId;
+                        const opt = document.createElement('option');
+                        opt.value = nsId;
+                        opt.textContent = fullName !== nsId ? fullName : nsId;
+                        sel.appendChild(opt);
+                    }
+                    nsContainer.innerHTML = '';
+                    nsContainer.appendChild(sel);
+                }
+            } catch (e) {
+                console.error('[MetaKey_select] namespace fetch error', e);
+                nsContainer.innerHTML = `<span style="color:red;font-size:12px;">エラー: ${e.message}</span>`;
+            }
+        }
+
     } else {
         if (domAddress) domAddress.innerHTML = '';
         if (domMosaic) domMosaic.style.display = 'none';

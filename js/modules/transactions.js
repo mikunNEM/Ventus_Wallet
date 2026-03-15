@@ -223,9 +223,9 @@ export function buildMosaicMetadataEmbeddedTx(targetAddress, mosaicIdHex, key, n
     const descriptor = new sdkSymbol.descriptors.MosaicMetadataTransactionV1Descriptor(
         new sdkSymbol.Address(targetAddress),
         key,
+        new sdkSymbol.models.UnresolvedMosaicId(BigInt('0x' + mosaicIdHex)),  // メタデータ記録先モザイク
         sizeDelta,
-        updatedValue,
-        new sdkSymbol.models.UnresolvedMosaicId(BigInt('0x' + mosaicIdHex))
+        updatedValue
     );
     return facade.createEmbeddedTransactionFromTypedDescriptor(descriptor, signerPubKey);
 }
@@ -244,9 +244,9 @@ export function buildNamespaceMetadataEmbeddedTx(targetAddress, namespaceIdHex, 
     const descriptor = new sdkSymbol.descriptors.NamespaceMetadataTransactionV1Descriptor(
         new sdkSymbol.Address(targetAddress),
         key,
+        new sdkSymbol.models.NamespaceId(BigInt('0x' + namespaceIdHex)),  // メタデータ記録先ネームスペース
         sizeDelta,
-        updatedValue,
-        new sdkSymbol.models.NamespaceId(BigInt('0x' + namespaceIdHex))
+        updatedValue
     );
     return facade.createEmbeddedTransactionFromTypedDescriptor(descriptor, signerPubKey);
 }
@@ -298,7 +298,7 @@ export function buildMosaicDefinitionEmbeddedTxs(
     // v3: 引数順 = (MosaicId, BlockDuration, nonce, flags, divisibility)
     const defDescriptor = new sdkSymbol.descriptors.MosaicDefinitionTransactionV1Descriptor(
         mosaicId,                                           // モザイクID
-        new sdkSymbol.models.BlockDuration(BigInt(durationBlocks)), // 有効期限
+        new sdkSymbol.models.BlockDuration(Number(durationBlocks)), // 有効期限
         nonce,                                              // ナンス
         flags,                                              // モザイクフラグ
         divisibility                                        // 可分性
@@ -325,10 +325,14 @@ export function buildMosaicDefinitionEmbeddedTxs(
  * v2: sym.NamespaceRegistrationTransaction.createRootNamespace(...)
  */
 export function buildRootNamespaceTx(namespaceName, durationBlocks, signerPubKey, feeMultiplier = 100) {
+    // v3: generateNamespaceId でネームスペースIDを生成（引数順: id, type, duration, parentId, name）
+    const namespaceId = new sdkSymbol.models.NamespaceId(sdkSymbol.generateNamespaceId(namespaceName));
     const descriptor = new sdkSymbol.descriptors.NamespaceRegistrationTransactionV1Descriptor(
-        new sdkSymbol.models.BlockDuration(BigInt(durationBlocks)),
-        null,  // parentId: null = ルート
-        namespaceName
+        namespaceId,                                                  // id
+        sdkSymbol.models.NamespaceRegistrationType.ROOT,             // registrationType
+        new sdkSymbol.models.BlockDuration(BigInt(durationBlocks)),  // duration
+        undefined,                                                    // parentId: ルートの場合は省略
+        namespaceName                                                 // name
     );
     return facade.createTransactionFromTypedDescriptor(descriptor, signerPubKey, feeMultiplier, DEADLINE_SEC);
 }
@@ -338,10 +342,15 @@ export function buildRootNamespaceTx(namespaceName, durationBlocks, signerPubKey
  * v2: sym.NamespaceRegistrationTransaction.createSubNamespace(...)
  */
 export function buildSubNamespaceTx(subName, parentNamespaceIdHex, signerPubKey, feeMultiplier = 100) {
+    // 親ネームスペースIDからサブネームスペースIDを生成
+    const parentId = BigInt('0x' + parentNamespaceIdHex);
+    const namespaceId = new sdkSymbol.models.NamespaceId(sdkSymbol.generateNamespaceId(subName, parentId));
     const descriptor = new sdkSymbol.descriptors.NamespaceRegistrationTransactionV1Descriptor(
-        null,  // duration: null = サブ
-        new sdkSymbol.models.NamespaceId(BigInt('0x' + parentNamespaceIdHex)),
-        subName
+        namespaceId,                                                  // id
+        sdkSymbol.models.NamespaceRegistrationType.CHILD,            // registrationType
+        undefined,                                                    // duration: サブの場合は省略
+        parentId,                                                     // parentId
+        subName                                                       // name
     );
     return facade.createTransactionFromTypedDescriptor(descriptor, signerPubKey, feeMultiplier, DEADLINE_SEC);
 }
@@ -435,13 +444,18 @@ export function buildMosaicRevocationEmbeddedTx(sourceAddress, mosaicIdHex, amou
  * @param {string} signerPubKey
  * @param {number} feeMultiplier
  */
-export function buildAddressAliasTx(action, namespaceIdHex, address, signerPubKey, feeMultiplier = 100) {
+export function buildAddressAliasTx(action, namespaceId, address, signerPubKey, feeMultiplier = 100) {
     const actionModel = action === 'link'
         ? sdkSymbol.models.AliasAction.LINK
         : sdkSymbol.models.AliasAction.UNLINK;
 
+    // namespaceId: BigInt または hex文字列どちらも受け付ける
+    const nsId = typeof namespaceId === 'bigint'
+        ? namespaceId
+        : BigInt('0x' + namespaceId);
+
     const descriptor = new sdkSymbol.descriptors.AddressAliasTransactionV1Descriptor(
-        new sdkSymbol.models.NamespaceId(BigInt('0x' + namespaceIdHex)),
+        new sdkSymbol.models.NamespaceId(nsId),
         new sdkSymbol.Address(address),
         actionModel
     );
@@ -458,14 +472,18 @@ export function buildAddressAliasTx(action, namespaceIdHex, address, signerPubKe
  * @param {string} signerPubKey
  * @param {number} feeMultiplier
  */
-export function buildMosaicAliasTx(action, namespaceIdHex, mosaicIdHex, signerPubKey, feeMultiplier = 100) {
+export function buildMosaicAliasTx(action, namespaceId, mosaicId, signerPubKey, feeMultiplier = 100) {
     const actionModel = action === 'link'
         ? sdkSymbol.models.AliasAction.LINK
         : sdkSymbol.models.AliasAction.UNLINK;
 
+    // namespaceId/mosaicId: BigInt または hex文字列どちらも受け付ける
+    const nsId = typeof namespaceId === 'bigint' ? namespaceId : BigInt('0x' + namespaceId);
+    const msId = typeof mosaicId  === 'bigint' ? mosaicId  : BigInt('0x' + mosaicId);
+
     const descriptor = new sdkSymbol.descriptors.MosaicAliasTransactionV1Descriptor(
-        new sdkSymbol.models.NamespaceId(BigInt('0x' + namespaceIdHex)),
-        new sdkSymbol.models.UnresolvedMosaicId(BigInt('0x' + mosaicIdHex)),
+        new sdkSymbol.models.NamespaceId(nsId),
+        new sdkSymbol.models.MosaicId(msId),
         actionModel
     );
     return facade.createTransactionFromTypedDescriptor(descriptor, signerPubKey, feeMultiplier, DEADLINE_SEC);
