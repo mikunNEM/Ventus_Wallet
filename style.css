@@ -1545,11 +1545,6 @@ hr {
   margin-bottom: auto;
   border-radius: 5px;
   }
-  @media screen and (max-width: 480px) {
-  .divisibility {
- /* margin-top: 8px;*/
-  }
-  }
   .Form-Item-Label-Required {
   border-radius: 6px;
   margin-right: 8px;
