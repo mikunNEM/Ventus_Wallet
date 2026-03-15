@@ -2712,77 +2712,123 @@ async function select_Page_meta() {
 async function holder_list() {
     const pageNum = Number(document.getElementById('page_num_holder1')?.value ?? 1);
     const mosaicId = document.querySelector('.select_r')?.value ?? '';
-    if (!mosaicId) return;
+    if (!mosaicId) {
+        Swal.fire({ title: 'モザイクを選択してください', icon: 'warning' }); return;
+    }
 
     const holderTbl = document.getElementById('holder_table');
-    if (holderTbl) holderTbl.innerHTML = '';
+    if (holderTbl) holderTbl.innerHTML = '<span style="color:#aaa;font-size:13px;">読み込み中...</span>';
 
     try {
         const moInfo = await getMosaicInfo(mosaicId);
-        const div = moInfo.divisibility;
+        const div    = moInfo.divisibility ?? 0;
+        const totalSupply = Number(BigInt(moInfo.supply ?? 0)) / Math.pow(10, div);
 
         const data = await fetchJson(new URL(
             `/accounts?mosaicId=${mosaicId}&orderBy=balance&order=desc&pageSize=100&pageNumber=${pageNum}`, NODE
         ));
         const accounts = data.data ?? [];
 
-        // モザイク名
+        // モザイク名・NS名表示
         const domMosaicRev = document.getElementById('mosaic_ID_rev');
-        const domNsRev = document.getElementById('namespace_rev');
-        if (domMosaicRev) domMosaicRev.innerHTML = `<big>< ${mosaicId} ></big>`;
+        const domNsRev     = document.getElementById('namespace_rev');
+        if (domMosaicRev) domMosaicRev.innerHTML = `<span style="font-family:monospace;font-size:13px;color:#555;">&lt; ${mosaicId} &gt;</span>`;
         if (domNsRev) {
             try {
-                const nameRes = await getMosaicsNames([mosaicId]);
+                const nameRes  = await getMosaicsNames([mosaicId]);
                 const nameEntry = nameRes?.[0];
-                const names = nameEntry?.names ?? [];
-                const n = names[0];
+                const n = nameEntry?.names?.[0];
                 const nameStr = n && typeof n === 'object' ? n.name : (n ?? '');
-                domNsRev.innerHTML = nameStr ? `<big>${nameStr}</big>` : '';
-            } catch { domNsRev.innerHTML = ''; }
+                domNsRev.innerHTML = nameStr
+                    ? `<big style="font-weight:bold;color:#0a5;">${nameStr}</big>`
+                    : '';
+            } catch { if (domNsRev) domNsRev.innerHTML = ''; }
         }
 
         if (!holderTbl) return;
-        const tbl = document.createElement('table');
-        tbl.setAttribute('border', '1');
-        const tblBody = document.createElement('tbody');
 
-        const hdr = document.createElement('tr');
-        ['No', 'アドレス', '保有量'].forEach(h => {
-            const th = document.createElement('td');
+        // ── テーブル構築 ──────────────────────────────────────────────────
+        const tbl = document.createElement('table');
+        tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+
+        const tblHead = document.createElement('thead');
+        const hdrRow  = document.createElement('tr');
+        ['順位','アドレス','保有量','シェア(%)'].forEach(h => {
+            const th = document.createElement('th');
             th.textContent = h;
-            th.style.textAlign = 'center';
-            hdr.appendChild(th);
+            th.style.cssText = 'background:#0a5;color:#fff;padding:6px 8px;text-align:center;white-space:nowrap;position:sticky;top:0;';
+            hdrRow.appendChild(th);
         });
-        tblBody.appendChild(hdr);
+        tblHead.appendChild(hdrRow);
+        tbl.appendChild(tblHead);
+
+        const tblBody = document.createElement('tbody');
+        const rankMedals = ['🥇','🥈','🥉'];
+        const rows = []; // CSV用
 
         accounts.forEach((entry, idx) => {
             const account = entry.account ?? entry;
-            const address = account.address?.length === 48 ? hexToAddress(account.address) : (account.address ?? '');
-            const rawAmount = account.mosaics?.find(m => m.id === mosaicId)?.amount ?? 0;
-            const amount = (Number(rawAmount) / Math.pow(10, div)).toLocaleString(undefined, {
-                minimumFractionDigits: div, maximumFractionDigits: div
-            });
+            const address = account.address?.length === 48
+                ? hexToAddress(account.address) : (account.address ?? '');
+            const rawAmt   = account.mosaics?.find(m => m.id.toUpperCase() === mosaicId.toUpperCase())?.amount ?? 0;
+            const amount   = Number(BigInt(rawAmt)) / Math.pow(10, div);
+            const amountDisp = amount.toLocaleString(undefined, { minimumFractionDigits: div, maximumFractionDigits: div });
+            const share    = totalSupply > 0 ? (amount / totalSupply * 100) : 0;
+            const shareDisp = share.toFixed(4);
+            const rank     = idx + 1 + 100 * (pageNum - 1);
+            const medal    = rank <= 3 ? rankMedals[rank - 1] : '';
+
             const row = document.createElement('tr');
-            const no = document.createElement('td');
-            no.textContent = String(idx + 1 + 100 * (pageNum - 1));
-            no.style.textAlign = 'right';
-            const addrCell = document.createElement('td');
-            const link = document.createElement('a');
-            link.href = `${EXPLORER}/accounts/${address}`;
-            link.target = '_blank';
+            row.style.cssText = idx % 2 === 0 ? 'background:#e8f8f0;' : 'background:#fff;';
+            if (rank <= 3) row.style.fontWeight = 'bold';
+
+            const tdRank = document.createElement('td');
+            tdRank.textContent = `${medal} ${rank}`;
+            tdRank.style.cssText = 'text-align:center;padding:5px 6px;border-bottom:1px solid #cde;white-space:nowrap;';
+
+            const tdAddr = document.createElement('td');
+            const link   = document.createElement('a');
+            link.href    = `${EXPLORER}/accounts/${address}`;
+            link.target  = '_blank';
             link.textContent = address;
-            addrCell.appendChild(link);
-            const amtCell = document.createElement('td');
-            amtCell.textContent = amount;
-            amtCell.style.textAlign = 'right';
-            row.append(no, addrCell, amtCell);
+            link.style.cssText = 'font-family:monospace;font-size:10px;word-break:break-all;color:#059;';
+            tdAddr.style.cssText = 'padding:5px 6px;border-bottom:1px solid #cde;';
+            tdAddr.appendChild(link);
+
+            const tdAmt = document.createElement('td');
+            tdAmt.textContent = amountDisp;
+            tdAmt.style.cssText = 'text-align:right;padding:5px 8px;border-bottom:1px solid #cde;font-family:monospace;';
+
+            const tdShare = document.createElement('td');
+            tdShare.textContent = `${shareDisp}%`;
+            tdShare.style.cssText = 'text-align:right;padding:5px 8px;border-bottom:1px solid #cde;color:#0a5;';
+
+            row.append(tdRank, tdAddr, tdAmt, tdShare);
             tblBody.appendChild(row);
+            rows.push([rank, address, amountDisp, `${shareDisp}%`]);
         });
 
         tbl.appendChild(tblBody);
+        holderTbl.innerHTML = '';
         holderTbl.appendChild(tbl);
+
+        // ── CSVダウンロードボタン ───────────────────────────────────────
+        const csvBtn = document.getElementById('download_csv_button');
+        if (csvBtn) {
+            csvBtn.onclick = () => {
+                const header = '順位,アドレス,保有量,シェア(%)';
+                const csv    = [header, ...rows.map(r => r.join(','))].join('\n');
+                const blob   = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url    = URL.createObjectURL(blob);
+                const a      = document.createElement('a');
+                a.href = url; a.download = `rich_list_${mosaicId}_p${pageNum}.csv`;
+                a.click(); URL.revokeObjectURL(url);
+            };
+            csvBtn.style.display = rows.length > 0 ? 'inline-block' : 'none';
+        }
     } catch (e) {
         console.error('[holder_list]', e);
+        if (holderTbl) holderTbl.innerHTML = `<span style="color:red;">エラー: ${e.message}</span>`;
     }
 }
 
