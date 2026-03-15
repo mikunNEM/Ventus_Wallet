@@ -340,9 +340,8 @@ button.accountInfo{
 }
 
 .sender-card #agg_button {
-  position: absolute;
-  bottom: 80px; 
-  left: 40px;
+  margin-top: 12px;
+  text-align: left;
 }
 
 .sender-card #multisig_message {
