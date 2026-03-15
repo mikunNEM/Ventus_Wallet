@@ -127,20 +127,6 @@ ventus/
 
 ---
 
-## 🚀 デプロイ（さくらレンタルサーバー等）
-
-SSH が使える場合、rsync でそのままデプロイ可能（ビルド不要）：
-
-```bash
-rsync -avz --delete \
-  --exclude='.git' \
-  --exclude='.agents' \
-  --exclude='.vscode' \
-  ./ user@your-server:/home/user/www/ventus/
-```
-
----
-
 ## ⚠️ 注意事項
 
 - 秘密鍵は一切扱いません。署名は [SSS Extension](https://chrome.google.com/webstore/detail/sss-extension/lliohepcpicdffkfknizddecpmlnmkp) が行います。
