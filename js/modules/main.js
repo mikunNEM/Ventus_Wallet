@@ -408,11 +408,19 @@ async function initAccountDisplay(accountData) {
             try {
                 const info = await getMosaicInfoCached(m.id);
                 const flags = Number(info.moInfo.flags ?? 0);
+                // 自分が発行者（ownerAddress）かチェック
+                const ownerAddr = hexToAddress(info.moInfo.ownerAddress ?? '');
+                const isOwner = ownerAddr === window.SSS?.activeAddress;
                 // names[0] からネームスペース名を取得（オブジェクト/文字列の両対応）
                 const rawName = (info.names ?? [])[0];
                 const nsName = rawName ? (typeof rawName === 'object' ? rawName.name : rawName) : null;
                 const displayName = nsName || m.name; // NSなければhex IDのまま
-                return { ...m, name: displayName, supplyMutable: !!(flags & 1), revokable: !!(flags & 8) };
+                return {
+                    ...m,
+                    name: displayName,
+                    supplyMutable: isOwner && !!(flags & 1), // 自分が発行者 かつ supplyMutable
+                    revokable:     isOwner && !!(flags & 8), // 自分が発行者 かつ revokable
+                };
             } catch {
                 return { ...m, supplyMutable: false, revokable: false };
             }
