@@ -401,33 +401,48 @@ async function initAccountDisplay(accountData) {
     const sel1 = buildSelect(document.querySelector('.form-mosaic_ID'), 'select_m1', selectMosaics);
     const sel2 = buildSelect(document.querySelector('.mosaic_ID2'), 'select_m1', selectMosaics);
 
-    // 供給量変更・回収ダイアログ用：モザイク情報を並列取得してフラグでフィルタ
-    // Symbol mosaic flags: bit0=supplyMutable, bit1=transferable, bit2=restrictable, bit3=revokable
-    const mosaicInfoList = await Promise.all(
-        selectMosaics.map(async m => {
+    // ── 供給量変更・回収ダイアログ用：発行したモザイクを ownerAddress で取得 ──
+    // accountData.mosaics は「保有」モザイクなので発行済みでも配布済みのものが漏れる。
+    // /mosaics?ownerAddress= は「自分が作成した」モザイクの一覧なので正確。
+    // このエンドポイントはレスポンスに flags を含むので getMosaicInfo 不要。
+    const activeAddr = window.SSS?.activeAddress;
+    let supplyMutableMosaics = [];
+    let revokableMosaics     = [];
+    if (activeAddr) {
+        try {
+            // Symbol mosaic flags: bit0=supplyMutable, bit1=transferable, bit2=restrictable, bit3=revokable
+            const ownedRes = await fetchJson(new URL(
+                `/mosaics?ownerAddress=${activeAddr}&pageSize=100&order=desc`, NODE
+            ));
+            const ownedList = (ownedRes.data ?? []).map(entry => {
+                const m = entry.mosaic ?? entry;
+                return { id: m.id ?? '', flags: Number(m.flags ?? 0) };
+            }).filter(m => m.id);
+
+            // ネームスペース名を一括取得
+            const ownedIds = ownedList.map(m => m.id);
+            let ownedNameMap = {};
             try {
-                const info = await getMosaicInfoCached(m.id);
-                const flags = Number(info.moInfo.flags ?? 0);
-                // 自分が発行者（ownerAddress）かチェック
-                const ownerAddr = hexToAddress(info.moInfo.ownerAddress ?? '');
-                const isOwner = ownerAddr === window.SSS?.activeAddress;
-                // names[0] からネームスペース名を取得（オブジェクト/文字列の両対応）
-                const rawName = (info.names ?? [])[0];
-                const nsName = rawName ? (typeof rawName === 'object' ? rawName.name : rawName) : null;
-                const displayName = nsName || m.name; // NSなければhex IDのまま
-                return {
-                    ...m,
-                    name: displayName,
-                    supplyMutable: isOwner && !!(flags & 1), // 自分が発行者 かつ supplyMutable
-                    revokable:     isOwner && !!(flags & 8), // 自分が発行者 かつ revokable
-                };
-            } catch {
-                return { ...m, supplyMutable: false, revokable: false };
-            }
-        })
-    );
-    const supplyMutableMosaics = mosaicInfoList.filter(m => m.supplyMutable);
-    const revokableMosaics     = mosaicInfoList.filter(m => m.revokable);
+                const ownedNames = await getMosaicsNames(ownedIds);
+                for (const entry of (ownedNames ?? [])) {
+                    const raw = entry.names?.[0];
+                    const resolved = raw ? (typeof raw === 'object' ? raw.name : raw) : null;
+                    if (resolved) ownedNameMap[entry.mosaicId.toUpperCase()] = resolved;
+                }
+            } catch { }
+
+            const ownedMosaics = ownedList.map(m => ({
+                id: m.id,
+                name: ownedNameMap[m.id.toUpperCase()] ?? m.id,
+                flags: m.flags,
+            }));
+
+            supplyMutableMosaics = ownedMosaics.filter(m => !!(m.flags & 1));
+            revokableMosaics     = ownedMosaics.filter(m => !!(m.flags & 8));
+        } catch (e) {
+            console.warn('[initAccountDisplay] owned mosaics fetch failed:', e);
+        }
+    }
     console.log('[initAccountDisplay] supplyMutable:', supplyMutableMosaics.map(m => m.name));
     console.log('[initAccountDisplay] revokable:', revokableMosaics.map(m => m.name));
 
