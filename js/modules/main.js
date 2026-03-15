@@ -420,6 +420,8 @@ async function initAccountDisplay(accountData) {
     );
     const supplyMutableMosaics = mosaicInfoList.filter(m => m.supplyMutable);
     const revokableMosaics     = mosaicInfoList.filter(m => m.revokable);
+    console.log('[initAccountDisplay] supplyMutable:', supplyMutableMosaics.map(m => m.name));
+    console.log('[initAccountDisplay] revokable:', revokableMosaics.map(m => m.name));
 
     // 供給量変更ダイアログ用セレクト（supplyMutable のみ）
     const selSup = buildSelect(document.querySelector('.select_mosaic_sup'), 'select_sup', supplyMutableMosaics);
