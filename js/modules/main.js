@@ -1082,8 +1082,8 @@ async function main() {
             if (popup) popup.classList.remove('is-show');
             const audioVentus = new Audio('./src/ventus.mp3');
             audioVentus.play();
-            // 承認検知 → 1.5秒後にリロード（状態を確実に最新化）
-            setTimeout(() => location.reload(), 1500);
+            // 承認検知 → 5秒後にリロード（音が鳴り終わってから）
+            setTimeout(() => location.reload(), 5000);
         },
         (tx) => {
             const audio1 = new Audio('./src/ding.ogg');
