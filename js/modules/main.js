@@ -2765,8 +2765,26 @@ async function holder_list() {
         tbl.appendChild(tblHead);
 
         const tblBody = document.createElement('tbody');
-        const rankMedals = ['🥇','🥈','🥉'];
         const rows = []; // CSV用
+
+        // ── NFT画像取得・表示（mosaic-center.net）─────────────────────
+        const domMosaicImg = document.getElementById('mosaic_img');
+        if (domMosaicImg) domMosaicImg.innerHTML = ''; // 画像をクリア
+        fetch(`https://mosaic-center.net/db/api.php?mode=search&mosaicid=${mosaicId}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(imgData => {
+                if (domMosaicImg && imgData && imgData[0] && imgData[0][7]) {
+                    domMosaicImg.innerHTML = `
+                        <br><div style="text-align:center;">
+                            <a class="btn-style-link" href="https://mosaic-center.net/" target="_blank">Mosaic Center</a>
+                            <br><br>
+                            <a href="${EXPLORER}/mosaics/${mosaicId}" target="_blank" style="display:inline-block;width:200px;">
+                                <img class="mosaic_img" src="${imgData[0][7]}" width="200" style="border-radius:8px;box-shadow:0 2px 8px #0003;">
+                            </a>
+                        </div>`;
+                }
+            })
+            .catch(() => {});
 
         accounts.forEach((entry, idx) => {
             const account = entry.account ?? entry;
@@ -2778,14 +2796,13 @@ async function holder_list() {
             const share    = totalSupply > 0 ? (amount / totalSupply * 100) : 0;
             const shareDisp = share.toFixed(4);
             const rank     = idx + 1 + 100 * (pageNum - 1);
-            const medal    = rank <= 3 ? rankMedals[rank - 1] : '';
 
             const row = document.createElement('tr');
             row.style.cssText = idx % 2 === 0 ? 'background:#e8f8f0;' : 'background:#fff;';
             if (rank <= 3) row.style.fontWeight = 'bold';
 
             const tdRank = document.createElement('td');
-            tdRank.textContent = `${medal} ${rank}`;
+            tdRank.textContent = String(rank);
             tdRank.style.cssText = 'text-align:center;padding:5px 6px;border-bottom:1px solid #cde;white-space:nowrap;';
 
             const tdAddr = document.createElement('td');
