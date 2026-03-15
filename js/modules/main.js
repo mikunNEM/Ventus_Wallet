@@ -450,6 +450,8 @@ async function initAccountDisplay(accountData) {
     const selSup = buildSelect(document.querySelector('.select_mosaic_sup'), 'select_sup', supplyMutableMosaics);
     // 回収ダイアログ用セレクト（revokable のみ）
     const selRev = buildSelect(document.querySelector('.revoke_select'), 'select_r', revokableMosaics);
+    // セレクト変更時にリッチリストを自動更新
+    if (selRev) selRev.addEventListener('change', () => { if (typeof window.holder_list === 'function') window.holder_list(); });
 
     // 保有量・期限切れを更新する関数
     const updateHoyu = async (mosaicIdHex) => {

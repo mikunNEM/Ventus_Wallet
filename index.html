@@ -1386,7 +1386,16 @@
 
       closePopUp(blackBg);
       closePopUp(closeBtn);
-      closePopUp(showBtn);
+      // 開くボタンはシンプルに開閉 + リッチリスト自動取得
+      if (showBtn) {
+        showBtn.addEventListener('click', function () {
+          popup_r.classList.toggle('is-show');
+          // モーダルが開いた場合にリッチリストを自動取得
+          if (popup_r.classList.contains('is-show')) {
+            if (typeof window.holder_list === 'function') window.holder_list();
+          }
+        });
+      }
       function closePopUp(elem) {
         if (!elem) return;
         elem.addEventListener('click', function () {
