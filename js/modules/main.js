@@ -893,8 +893,22 @@ async function showTransactions(activeAddress, pageNumber) {
                         typeBadge = `<span style="background:#888;color:#fff;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:bold;">↔️ 他者送信</span> <span style="font-size:11px;color:#777;font-family:monospace;">${_shortAddr(itxSigner)}</span>`;
                     }
                 } else {
-                    // その他Tx: 種別名のみ
-                    typeBadge = `<span style="background:rgba(122,85,10,0.12);color:#7a550a;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:bold;">${getTransactionType(itxType)}</span>`;
+                    // Key Link 系: LINK / UNLINK + 省略公開鍵を表示
+                    const KEY_LINK_TYPES = [16716, 16963, 16972]; // ACCOUNT/VRF/NODE_KEY_LINK
+                    if (KEY_LINK_TYPES.includes(itxType)) {
+                        const action    = itx.linkAction === 0 ? 'UNLINK' : 'LINK';
+                        const actionClr = itx.linkAction === 0 ? '#e08020' : '#2090e0';
+                        const linkedKey = itx.linkedPublicKey ?? itx.vrfPublicKey ?? itx.nodePublicKey ?? '';
+                        // 公開鍵 → Symbolアドレスに変換して省略表示
+                        const linkedAddr = linkedKey.length === 64 ? publicKeyToAddress(linkedKey) : linkedKey;
+                        const shortLinked = _shortAddr(linkedAddr);
+                        typeBadge = `<span style="background:rgba(122,85,10,0.12);color:#7a550a;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:bold;">${getTransactionType(itxType)}</span>`
+                            + ` <span style="background:${actionClr};color:#fff;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:bold;">${action}</span>`
+                            + (shortLinked ? ` <span style="font-size:11px;color:#666;font-family:monospace;">${_shortAddr(itxSigner)} → ${shortLinked}</span>` : '');
+                    } else {
+                        // その他Tx: 種別名のみ
+                        typeBadge = `<span style="background:rgba(122,85,10,0.12);color:#7a550a;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:bold;">${getTransactionType(itxType)}</span>`;
+                    }
                 }
 
                 let html = `<div style="margin-bottom:4px;">${typeBadge}</div>`;
