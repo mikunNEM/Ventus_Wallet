@@ -241,12 +241,16 @@ h4 {
 .left {
   width: 720px;
   position: fixed;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 @media screen and (max-width:  480px) {
   .left {
     width: 360px;
     position: fixed;
+    height: 100vh;
+    overflow-y: auto;
   }
 }
 
