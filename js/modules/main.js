@@ -192,13 +192,30 @@ async function getAvailableNode() {
     // ブロック高が最大のノードを選択
     pool.sort((a, b) => b.height - a.height);
 
-    const best = pool[0];
-    if (!best) {
+    if (!pool.length) {
         Swal.fire('Active Node Error!!', '使用可能なノードが見つかりませんでした。');
         return undefined;
     }
 
-    return new URL(best.endpoint).origin;
+    // Mosaic_Viewer.html と同様に /node/health でノードの稼動状態を確認
+    // unhealthy なら次のノードを試みる
+    for (const candidate of pool) {
+        const nodeUrl = new URL(candidate.endpoint).origin;
+        try {
+            const healthRes = await fetch(`${nodeUrl}/node/health`);
+            const health = await healthRes.json();
+            if (health.status?.apiNode === 'up' && health.status?.db === 'up') {
+                console.log('[getAvailableNode] selected:', nodeUrl, '(height:', candidate.height, ')');
+                return nodeUrl;
+            }
+            console.warn('[getAvailableNode] unhealthy, skip:', nodeUrl, health.status);
+        } catch (e) {
+            console.warn('[getAvailableNode] health check failed, skip:', nodeUrl, e.message);
+        }
+    }
+
+    Swal.fire('Active Node Error!!', '使用可能なノードが見つかりませんでした。');
+    return undefined;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
