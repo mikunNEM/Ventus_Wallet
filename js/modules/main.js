@@ -358,8 +358,10 @@ async function initAccountDisplay(accountData) {
     try {
         const namesRes = await getMosaicsNames(mosaicIds);
         for (const entry of (namesRes ?? [])) {
-            nameMap[entry.mosaicId.toUpperCase()] =
-                entry.names.length > 0 ? entry.names[0] : entry.mosaicId;
+            // names[0] はオブジェクト {name:"..."}（または文字列）どちらも対応
+            const raw = entry.names?.[0];
+            const resolved = raw ? (typeof raw === 'object' ? raw.name : raw) : null;
+            if (resolved) nameMap[entry.mosaicId.toUpperCase()] = resolved;
         }
     } catch { }
 
@@ -406,7 +408,11 @@ async function initAccountDisplay(accountData) {
             try {
                 const info = await getMosaicInfoCached(m.id);
                 const flags = Number(info.moInfo.flags ?? 0);
-                return { ...m, supplyMutable: !!(flags & 1), revokable: !!(flags & 8) };
+                // names[0] からネームスペース名を取得（オブジェクト/文字列の両対応）
+                const rawName = (info.names ?? [])[0];
+                const nsName = rawName ? (typeof rawName === 'object' ? rawName.name : rawName) : null;
+                const displayName = nsName || m.name; // NSなければhex IDのまま
+                return { ...m, name: displayName, supplyMutable: !!(flags & 1), revokable: !!(flags & 8) };
             } catch {
                 return { ...m, supplyMutable: false, revokable: false };
             }
