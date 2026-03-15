@@ -626,10 +626,21 @@ function _decodeMsgPayload(msgPayload) {
     }
     let text = '';
     if (msgHex) {
-        try {
-            const bytes = new Uint8Array(msgHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
-            text = new TextDecoder().decode(bytes);
-        } catch { text = msgHex; }
+        // 0xFE = 委任ハーベスト(PersistentDelegationRequest)バイナリ → hex表示
+        if (msgType === 0xFE) {
+            text = `[HEX] ${msgHex.toUpperCase()}`;
+        } else {
+            try {
+                const bytes = new Uint8Array(msgHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+                const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+                // 制御文字（タブ・改行以外）が含まれる場合はhex表示
+                const hasBinary = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(decoded);
+                text = hasBinary ? `[HEX] ${msgHex.toUpperCase()}` : decoded;
+            } catch {
+                // UTF-8デコード失敗 → hex表示
+                text = `[HEX] ${msgHex.toUpperCase()}`;
+            }
+        }
     }
     return { msgType, msgHex, text };
 }
