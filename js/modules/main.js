@@ -761,24 +761,29 @@ async function loadHarvestStatus(address) {
                 statusEl.innerHTML = `<span style="color:#aaa;">🔄 ハーベスト状態確認中…</span>`;
                 try {
                     const targetNode = `https://${host}:3001`;
+                    console.log('[loadHarvestStatus] checking:', targetNode, 'linked:', linked);
                     const unlockedRes = await fetch(
                         new URL('/node/unlockedaccount', targetNode),
                         { signal: AbortSignal.timeout(6000) }
                     );
                     const unlockedData = await unlockedRes.json();
+                    console.log('[loadHarvestStatus] unlockedData:', unlockedData);
 
                     // unlockedAccounts にリモートキー（linked key）が含まれているか確認
                     // 大文字小文字無視で比較（REST APIのレスポンス形式の違いに対応）
                     const accounts = unlockedData.unlockedAccounts ?? unlockedData ?? [];
                     const linkedLower = linked.toLowerCase();
+                    console.log('[loadHarvestStatus] accounts count:', accounts.length, 'linkedLower:', linkedLower);
                     const isHarvesting = Array.isArray(accounts)
                         && accounts.some(k => k.toLowerCase() === linkedLower);
+                    console.log('[loadHarvestStatus] isHarvesting:', isHarvesting);
 
                     statusEl.innerHTML = isHarvesting
                         ? `<span style="color:#4caf50;font-weight:bold;">🟢 有効</span>`
                         : `<span style="color:#f44336;font-weight:bold;">🔴 無効</span>`;
-                } catch {
+                } catch (e) {
                     // ノードへのアクセス失敗（CORS 含む）
+                    console.warn('[loadHarvestStatus] fetch failed:', e.message);
                     statusEl.innerHTML = `<span style="color:#f44336;font-weight:bold;">🔴 無効</span>`;
                 }
             }
