@@ -760,14 +760,12 @@ async function loadHarvestStatus(address) {
                         `<span style="color:#4caf50;font-weight:bold;">🟢 有効</span>`;
                 } else {
                     statusEl.innerHTML =
-                        `<span style="color:#f44336;font-weight:bold;">🔴 無効</span>` +
-                        `<span style="color:#aaa;font-size:80%;"> (ノードに未登録)</span>`;
+                        `<span style="color:#f44336;font-weight:bold;">🔴 無効</span>`;
                 }
             } catch {
                 // ノードへのアクセス失敗（CORS 含む）
                 statusEl.innerHTML =
-                    `<span style="color:#f44336;font-weight:bold;">🔴 確認不可</span>` +
-                    `<span style="color:#aaa;font-size:80%;"> (委任設定あり・ノード応答なし)</span>`;
+                    `<span style="color:#f44336;font-weight:bold;">🔴 無効</span>`;
             }
         }
     } catch (e) {
