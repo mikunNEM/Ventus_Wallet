@@ -732,7 +732,7 @@ async function loadHarvestStatus(address) {
         try {
             const prefix  = networkType === 104 ? '' : 'testnet/';
             const watchRes = await fetch(
-                `https://nodewatch.symbol.tools/${prefix}api/symbol/nodes/peer?only_ssl=true&limit=300&order=random`
+                `https://nodewatch.symbol.tools/${prefix}api/symbol/nodes/peer`
             );
             const watchData = await watchRes.json();
             // レスポンスは配列直接。各ノードは endpoint(URL形式) と publicKey フィールドを持つ
