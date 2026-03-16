@@ -2287,8 +2287,22 @@ async function Msig_account(activeAddress) {
         // ④ sessionStorage から Bonded payload を取り出して announce（署名不要）
         const storedPayload = sessionStorage.getItem('_pendingBondedPayload');
         if (!storedPayload) throw new Error('Bonded TX のペイロードが見つかりません');
+        console.log('[Msig_account] Bonded TX announce → /transactions/partial hash:', bondedHashHex);
         await announceTransaction(storedPayload, true);
         sessionStorage.removeItem('_pendingBondedPayload');
+
+        // ⑤ Partial pool に届いたか確認（3秒後にポーリング）
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+            const partialCheck = await fetch(new URL(`/transactions/partial/${bondedHashHex}`, NODE));
+            if (partialCheck.ok) {
+                console.log('[Msig_account] ✅ Bonded TX が Partial プールに届きました！');
+            } else {
+                console.warn('[Msig_account] ⚠️ Bonded TX が Partial プールに見つかりません（伝播遅延の可能性）');
+            }
+        } catch (e) {
+            console.warn('[Msig_account] Partial pool 確認エラー:', e.message);
+        }
 
         Swal.fire({ title: 'マルチシグアカウント設定を送信しました！', text: '連署者の署名を待っています。', icon: 'success' });
     } catch (e) {
