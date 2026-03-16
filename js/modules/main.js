@@ -1401,8 +1401,20 @@ async function main() {
     loadHarvestStatus(activeAddress);   // 委任ノード・ステータス表示（非同期・並行）
     // ハーベスト履歴カーソルをリセット（ポップアップ初期表示）
     harvestLastMinHeight = null;
+    // テーブルをクリア（ポップアップ再表示時に重複しないよう）
+    const harvestTbody = document.querySelector('#harvest tbody, #harvest');
+    if (harvestTbody) {
+        // thead以外の行を削除
+        [...harvestTbody.querySelectorAll('tr')].forEach(tr => {
+            if (!tr.closest('thead')) tr.remove();
+        });
+    }
+    // さらに読み込むボタンを再表示
+    document.getElementById('harvests_footer')?.style.removeProperty('display');
     await getHarvests(15, activeAddress);
-    document.getElementById('harvests_more')?.addEventListener('click', () => getHarvests(15, activeAddress));
+    // onclick で上書き（addEventListener では毎回追加されて二重実行になる）
+    const moreBtn = document.getElementById('harvests_more');
+    if (moreBtn) moreBtn.onclick = () => getHarvests(15, activeAddress);
 
     // WebSocket 接続
     connectWebSocket(
