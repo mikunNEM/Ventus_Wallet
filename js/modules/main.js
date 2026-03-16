@@ -2611,6 +2611,18 @@ export async function handleSSS_harvest(activeAddress) {
         // ③ アカウント情報取得（supplementalPublicKeys でキーリンク済か確認）
         const accountInfo = await getAccountInfo(activeAddress);
         if (!accountInfo) throw new Error('アカウント情報が取得できませんでした');
+
+        // Importance チェック（v2 互換: 10,000 XYM 以上保有 + 約12時間経過が必要）
+        const importance = Number(accountInfo.importance ?? 0) / 78429286;
+        if (importance <= 0) {
+            Swal.fire({
+                title: 'インポータンスが無効です',
+                text: 'アカウントに 10,000 XYM 以上を保有し、約12時間経つとインポータンスが有効になります。',
+                icon: 'warning',
+            });
+            return;
+        }
+
         const supplKeys = accountInfo.supplementalPublicKeys ?? {};
 
         const signerPubKey = window.SSS.activePublicKey;
