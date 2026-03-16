@@ -287,6 +287,17 @@ function connectWebSocket(activeAddress, onConfirmed, onUnconfirmed, onPartialAd
             if (onPartialAdded) onPartialAdded(msg.data);
         } else if (topic.startsWith('partialRemoved/')) {
             console.error('[WS] ❌ partialRemoved! TX が Partial プールから除去されました（ノードに拒否）:', msg.data);
+            // 拒否理由を /transactionStatus で照会
+            const removedHash = msg.data?.meta?.hash;
+            if (removedHash) {
+                try {
+                    const statusRes = await fetch(new URL(`/transactionStatus/${removedHash}`, NODE));
+                    const statusJson = await statusRes.json().catch(() => ({}));
+                    console.error('[WS] partialRemoved 拒否理由:', JSON.stringify(statusJson));
+                } catch (e) {
+                    console.error('[WS] transactionStatus 取得失敗:', e.message);
+                }
+            }
         }
     };
 
