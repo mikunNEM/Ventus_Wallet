@@ -771,7 +771,9 @@ async function loadHarvestStatus(address) {
 
                     // unlockedAccounts にリモートキー（linked key）が含まれているか確認
                     // 大文字小文字無視で比較（REST APIのレスポンス形式の違いに対応）
-                    const accounts = unlockedData.unlockedAccounts ?? unlockedData ?? [];
+                    const accounts = unlockedData.unlockedAccounts   // 複数形（標準）
+                        ?? unlockedData.unlockedAccount              // 単数形（一部ノード）
+                        ?? [];
                     const linkedLower = linked.toLowerCase();
                     console.log('[loadHarvestStatus] accounts count:', accounts.length, 'linkedLower:', linkedLower);
                     const isHarvesting = Array.isArray(accounts)
