@@ -2198,6 +2198,34 @@ async function waitForHashLockConfirmed(hashHex, onRetry = null) {
     throw new Error('HashLock の承認タイムアウト（300秒）。ページをリロードすると自動的に再送されます。');
 }
 
+/**
+ * HashLock に必要な XYM 残高（10 XYM）があるか確認する
+ * @param {string} address - 起案者のアドレス
+ * @throws {Error} 残高不足の場合
+ */
+async function checkHashLockBalance(address) {
+    try {
+        const acctInfo = await getAccountInfo(address);
+        const mosaics = acctInfo?.mosaics ?? [];
+        const xymMosaic = mosaics.find(m => m.id.toUpperCase() === XYM_ID.toUpperCase());
+        const xymBalance = xymMosaic ? Number(xymMosaic.amount) : 0;
+        const REQUIRED = 10_000_000; // HashLock: 10 XYM 固定
+        if (xymBalance < REQUIRED) {
+            const bal = (xymBalance / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 6 });
+            throw new Error(
+                `HashLock に必要な 10 XYM が不足しています。\n` +
+                `現在の残高: ${bal} XYM\n` +
+                `フォーセット(https://testnet.symbol.tools/)でXYMを補充してください。`
+            );
+        }
+    } catch (e) {
+        // 自分で投げたエラーはそのまま再throw
+        if (e.message?.includes('HashLock')) throw e;
+        // アカウント情報取得失敗は警告のみ（ブロックしない）
+        console.warn('[checkHashLockBalance] 残高確認失敗（スキップ）:', e.message);
+    }
+}
+
 async function Msig_account(activeAddress) {
     const signerPubKey = window.SSS.activePublicKey;
 
@@ -2229,7 +2257,9 @@ async function Msig_account(activeAddress) {
         );
 
         // ── Bonded先署名フロー ──────────────────────────────────────────
-        // ① AggregateBonded を先に署名（SSS ダイアログ1回目）
+        // ① HashLock 残高確認（10 XYM 必要）
+        await checkHashLockBalance(activeAddress);
+        // ② AggregateBonded を先に署名（SSS ダイアログ1回目）
         const aggregateBonded = buildAggregateBondedTx([innerTx], signerPubKey, addAddresses.length, 100);
 
         const feeXym = Number(aggregateBonded.fee.value) / 1_000_000;
@@ -2334,7 +2364,9 @@ async function handleSSS_multisig(activeAddress) {
             if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM（+ HashLock 10 XYM）</p>`;
 
             // ── Bonded先署名フロー ──────────────────────────────────────────
-            // ① AggregateBonded を先に署名（SSS ダイアログ1回目）
+            // ① HashLock 残高確認（10 XYM 必要）
+            await checkHashLockBalance(activeAddress);
+            // ② AggregateBonded を先に署名（SSS ダイアログ1回目）
             const { payload: bondedSignedPayload, hash: bondedHashHex } = await signOnly(aggregateBonded);
             // SSS が1回目ダイアログを完全に閉じるまで少し待つ（2秒 = 競合防止）
             await new Promise(r => setTimeout(r, 2000));
