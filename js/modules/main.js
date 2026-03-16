@@ -2215,7 +2215,9 @@ async function checkHashLockBalance(address) {
             throw new Error(
                 `HashLock に必要な 10 XYM が不足しています。\n` +
                 `現在の残高: ${bal} XYM\n` +
-                `フォーセット(https://testnet.symbol.tools/)でXYMを補充してください。`
+                (networkType === 152
+                    ? `フォーセット(https://testnet.symbol.tools/)でXYMを補充してください。`
+                    : `XYM残高を補充してから再度お試しください。`)
             );
         }
     } catch (e) {
