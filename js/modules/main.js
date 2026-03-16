@@ -2132,22 +2132,49 @@ function initMsigAddButton() {
 
 /**
  * HashLock TX が confirm されるまでポーリングで待つ
+ * Phase 1: 30秒以内に unconfirmed（メモリプール）に到達するか確認
+ *          → 到達しない場合: ノードが TX を破棄したと判断して即エラー
+ * Phase 2: unconfirmed 到達後、最大 300秒 confirmed になるまで待機
  * @param {string} hashHex - HashLock TX のハッシュ (hex)
- * @param {number} timeoutMs - タイムアウト（ms）デフォルト 120秒
- * @param {number} intervalMs - ポーリング間隔（ms）デフォルト 5秒
  */
-async function waitForHashLockConfirmed(hashHex, timeoutMs = 120_000, intervalMs = 5_000) {
+async function waitForHashLockConfirmed(hashHex) {
     const node = window.ventus_NODE;
     if (!node) throw new Error('NODE not initialized');
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
+
+    // ── Phase 1: unconfirmed チェック（30秒・3秒間隔）──────────────────────
+    const unconfirmedDeadline = Date.now() + 30_000;
+    let inMempool = false;
+    while (Date.now() < unconfirmedDeadline) {
+        // まず confirmed も確認（即時承認されることがあるため）
+        try {
+            const res = await fetch(new URL(`/transactions/confirmed/${hashHex}`, node));
+            if (res.ok) return; // 即座に confirmed！
+        } catch {}
+        // unconfirmed に存在するか
+        try {
+            const res = await fetch(new URL(`/transactions/unconfirmed/${hashHex}`, node));
+            if (res.ok) { inMempool = true; break; }
+        } catch {}
+        await new Promise(r => setTimeout(r, 3_000));
+    }
+
+    if (!inMempool) {
+        throw new Error(
+            'HashLock TX がメモリプールに到達しませんでした。\n' +
+            'ノードが一時的にTXを拒否した可能性があります。しばらくしてから再試行してください。'
+        );
+    }
+
+    // ── Phase 2: confirmed チェック（最大 300秒・5秒間隔）─────────────────
+    const confirmedDeadline = Date.now() + 300_000;
+    while (Date.now() < confirmedDeadline) {
         try {
             const res = await fetch(new URL(`/transactions/confirmed/${hashHex}`, node));
             if (res.ok) return; // confirmed!
         } catch {}
-        await new Promise(r => setTimeout(r, intervalMs));
+        await new Promise(r => setTimeout(r, 5_000));
     }
-    throw new Error('HashLock の承認タイムアウト（120秒）。ネットワークを確認してください。');
+    throw new Error('HashLock の承認タイムアウト（300秒）。ネットワークを確認してください。');
 }
 
 async function Msig_account(activeAddress) {
