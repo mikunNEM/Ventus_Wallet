@@ -648,7 +648,7 @@ async function initAccountDisplay(accountData) {
 // ハーベスト表示
 // ─────────────────────────────────────────────────────────────────────────────
 
-let harvestLastMinHeight = null; // カーソルベースのページネーション用
+let harvestPageNumber = 0; // beneficiaryAddressクエリのページ番号
 
 // ハーベスト履歴取得時のフォールバックノードリスト
 const HARVEST_FALLBACK_NODES = {
@@ -671,10 +671,7 @@ async function fetchHarvestStatements(nodeUrl, address, pageNum, pageSize) {
 }
 
 async function getHarvests(pageSize, address) {
-    // カーソル: 直前ページの最小ブロック高の1つ前まで取得（初回はフィルタなし）
-    const heightFilter = harvestLastMinHeight
-        ? `&toHeight=${BigInt(harvestLastMinHeight) - 1n}`
-        : '';
+    harvestPageNumber++;
 
     // 接続中ノード → フォールバックノード の順に試みる
     const nodesToTry = [NODE, ...(HARVEST_FALLBACK_NODES[networkType] ?? [])];
@@ -686,7 +683,7 @@ async function getHarvests(pageSize, address) {
             // 自分のアドレスが受益者のブロックをすべて取得
             // （自ノードへの委任時: 自分のハーベスト75% + ノード運営25% の両方をカバー）
             res = await fetchJson(new URL(
-                `/blocks?beneficiaryAddress=${address}&pageSize=${pageSize}&order=desc${heightFilter}`,
+                `/blocks?beneficiaryAddress=${address}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
                 nodeUrl
             ));
             successNode = nodeUrl;
@@ -702,11 +699,6 @@ async function getHarvests(pageSize, address) {
     }
 
     const blocks = (res.data ?? []).map(item => item.block);
-
-    // カーソルを更新（次ページで使う最小高）
-    if (blocks.length > 0) {
-        harvestLastMinHeight = blocks[blocks.length - 1].height;
-    }
 
     // 各ブロックのレシートを並行取得
     const receiptPromises = blocks.map(block =>
@@ -1399,8 +1391,8 @@ async function main() {
 
     // ハーベスト表示
     loadHarvestStatus(activeAddress);   // 委任ノード・ステータス表示（非同期・並行）
-    // ハーベスト履歴カーソルをリセット（ポップアップ初期表示）
-    harvestLastMinHeight = null;
+    // ハーベスト履歴ページ番号をリセット（ポップアップ初期表示）
+    harvestPageNumber = 0;
     // テーブルをクリア（ポップアップ再表示時に重複しないよう）
     const harvestTbody = document.querySelector('#harvest tbody, #harvest');
     if (harvestTbody) {
