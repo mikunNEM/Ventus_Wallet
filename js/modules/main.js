@@ -2133,38 +2133,58 @@ function initMsigAddButton() {
 /**
  * HashLock TX が confirm されるまでポーリングで待つ
  * Phase 1: 30秒以内に unconfirmed（メモリプール）に到達するか確認
- *          → 到達しない場合: ノードが TX を破棄したと判断して即エラー
+ *          → 未到達の場合: onRetry コールバックで再アナウンスしてリトライ（1回のみ）
+ *          → リトライ後も未到達: エラー
  * Phase 2: unconfirmed 到達後、最大 300秒 confirmed になるまで待機
- * @param {string} hashHex - HashLock TX のハッシュ (hex)
+ * @param {string} hashHex     - HashLock TX のハッシュ (hex)
+ * @param {Function} onRetry   - Phase1失敗時に呼ぶ再アナウンス関数 (async)
  */
-async function waitForHashLockConfirmed(hashHex) {
+async function waitForHashLockConfirmed(hashHex, onRetry = null) {
     const node = window.ventus_NODE;
     if (!node) throw new Error('NODE not initialized');
 
-    // ── Phase 1: unconfirmed チェック（30秒・3秒間隔）──────────────────────
-    const unconfirmedDeadline = Date.now() + 30_000;
-    let inMempool = false;
-    while (Date.now() < unconfirmedDeadline) {
-        // まず confirmed も確認（即時承認されることがあるため）
+    // ── Phase 1 チェック（30秒・3秒間隔）を最大2回試みる ───────────────────
+    const tryPhase1 = async () => {
+        const deadline = Date.now() + 30_000;
+        while (Date.now() < deadline) {
+            try {
+                const res = await fetch(new URL(`/transactions/confirmed/${hashHex}`, node));
+                if (res.ok) return 'confirmed';
+            } catch {}
+            try {
+                const res = await fetch(new URL(`/transactions/unconfirmed/${hashHex}`, node));
+                if (res.ok) return 'mempool';
+            } catch {}
+            await new Promise(r => setTimeout(r, 3_000));
+        }
+        return 'not_found';
+    };
+
+    let phase1Result = await tryPhase1();
+
+    if (phase1Result === 'confirmed') return; // 即承認
+
+    if (phase1Result === 'not_found' && onRetry) {
+        // ── 1回だけリトライ: 再アナウンスして再チェック ────────────────────
+        console.warn('[waitForHashLockConfirmed] Phase1 未到達 → 再アナウンスしてリトライ');
         try {
-            const res = await fetch(new URL(`/transactions/confirmed/${hashHex}`, node));
-            if (res.ok) return; // 即座に confirmed！
-        } catch {}
-        // unconfirmed に存在するか
-        try {
-            const res = await fetch(new URL(`/transactions/unconfirmed/${hashHex}`, node));
-            if (res.ok) { inMempool = true; break; }
-        } catch {}
-        await new Promise(r => setTimeout(r, 3_000));
+            await onRetry();
+        } catch (e) {
+            console.error('[waitForHashLockConfirmed] 再アナウンス失敗:', e);
+        }
+        phase1Result = await tryPhase1();
     }
 
-    if (!inMempool) {
+    if (phase1Result === 'confirmed') return;
+
+    if (phase1Result === 'not_found') {
         throw new Error(
             'HashLock TX がメモリプールに到達しませんでした。\n' +
-            'ノードが一時的にTXを拒否した可能性があります。しばらくしてから再試行してください。'
+            '再アナウンスを試みましたが、ノードに受理されませんでした。しばらくしてから再試行してください。'
         );
     }
 
+    // phase1Result === 'mempool' → Phase 2へ
     // ── Phase 2: confirmed チェック（最大 300秒・5秒間隔）─────────────────
     const confirmedDeadline = Date.now() + 300_000;
     while (Date.now() < confirmedDeadline) {
@@ -2229,7 +2249,7 @@ async function Msig_account(activeAddress) {
         Swal.fire({ title: 'Hash Lock 送信済み', text: 'ブロックチェーンの承認を待っています...', icon: 'info', timer: 5000, showConfirmButton: false });
 
         // ③ confirm をポーリング待機
-        await waitForHashLockConfirmed(hashLockTxHash);
+        await waitForHashLockConfirmed(hashLockTxHash, () => announceTransaction(hashLockPayload));
 
         // ④ sessionStorage から Bonded payload を取り出して announce（署名不要）
         const storedPayload = sessionStorage.getItem('_pendingBondedPayload');
@@ -2327,7 +2347,7 @@ async function handleSSS_multisig(activeAddress) {
             Swal.fire({ title: 'Hash Lock 送信済み', text: 'ブロックチェーンの承認を待っています...', icon: 'info', timer: 5000, showConfirmButton: false });
 
             // ③ confirm をポーリング待機
-            await waitForHashLockConfirmed(hashLockTxHash);
+            await waitForHashLockConfirmed(hashLockTxHash, () => announceTransaction(hashLockPayload));
 
             // ④ sessionStorage から Bonded payload を announce（署名不要）
             const storedPayload = sessionStorage.getItem('_pendingBondedPayload');
