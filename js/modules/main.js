@@ -673,25 +673,34 @@ async function fetchHarvestStatements(nodeUrl, address, pageNum, pageSize) {
 async function getHarvests(pageSize, address) {
     harvestPageNumber++;
 
-    // リモートキー（supplementalPublicKeys.linked）でブロック検索
     const accountInfo = await getAccountInfo(address);
-    const remoteKey = accountInfo?.supplementalPublicKeys?.linked?.publicKey;
-
-    if (!remoteKey) {
-        console.warn('[getHarvests] リモートキーが未設定');
-        return;
-    }
+    const remoteKey   = accountInfo?.supplementalPublicKeys?.linked?.publicKey;
 
     // 接続中ノード → フォールバックノード の順に試みる
     const nodesToTry = [NODE, ...(HARVEST_FALLBACK_NODES[networkType] ?? [])];
-    let res = null;
+    let res1 = null; // 自分がサイナー（直接ハーベスト）
+    let res2 = null; // 自分のノードが受益者（委任者の25%徴収）
     let successNode = null;
+
     for (const nodeUrl of nodesToTry) {
         try {
-            res = await fetchJson(new URL(
-                `/blocks?signerPublicKey=${remoteKey}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
+            const promises = [];
+            // ①自分のリモートキーがサイナーのブロック（直接ハーベスト）
+            if (remoteKey) {
+                promises.push(fetchJson(new URL(
+                    `/blocks?signerPublicKey=${remoteKey}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
+                    nodeUrl
+                )));
+            }
+            // ②自分のアドレスが受益者のブロック（ノード運営の25%手数料）
+            promises.push(fetchJson(new URL(
+                `/blocks?beneficiaryAddress=${address}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
                 nodeUrl
-            ));
+            )));
+
+            const results = await Promise.all(promises);
+            if (remoteKey) { res1 = results[0]; res2 = results[1]; }
+            else            { res2 = results[0]; }
             successNode = nodeUrl;
             break;
         } catch (e) {
@@ -699,28 +708,34 @@ async function getHarvests(pageSize, address) {
         }
     }
 
-    if (!res) {
+    if (!res1 && !res2) {
         console.warn('[getHarvests] 全ノードで取得失敗');
         return;
     }
 
-    const blocks = res.data ?? [];
+    // ブロック高でマージ・重複排除 → 高さ降順でソート
+    const blockMap = new Map();
+    for (const item of (res1?.data ?? [])) blockMap.set(item.block.height, item.block);
+    for (const item of (res2?.data ?? [])) {
+        if (!blockMap.has(item.block.height)) blockMap.set(item.block.height, item.block);
+    }
+    const blocks = [...blockMap.values()].sort(
+        (a, b) => (BigInt(b.height) > BigInt(a.height) ? 1 : -1)
+    );
 
-    // 各ブロックのハーベスト手数料レシートを並行取得
-    // /statements/transaction?height={h} → type:8515 (HarvestFee) を抽出
-    const receiptPromises = blocks.map(item =>
+    // 各ブロックのレシートを並行取得
+    const receiptPromises = blocks.map(block =>
         fetchJson(new URL(
-            `/statements/transaction?height=${item.block.height}`,
+            `/statements/transaction?height=${block.height}`,
             successNode ?? NODE
         )).catch(() => null)
     );
     const receiptsResults = await Promise.all(receiptPromises);
 
+    // 表示：type=8515(HarvestFee) かつ自アドレス宛の合計
     for (let i = 0; i < blocks.length; i++) {
-        const block = blocks[i].block;
+        const block = blocks[i];
         const stmts = receiptsResults[i];
-
-        // type=8515 (HarvestFee) かつ targetAddress が自アカウントのものを合計
         let harvestAmount = 0n;
         for (const stmt of (stmts?.data ?? [])) {
             const s = stmt.statement ?? stmt;
@@ -733,11 +748,11 @@ async function getHarvests(pageSize, address) {
                 }
             }
         }
-
         showHarvestBlockRow(block.height, block.timestamp, harvestAmount.toString());
     }
 
-    if (res.pagination?.pageNumber >= res.pagination?.pageSize) {
+    // さらに読み込むボタンの表示制御
+    if (blocks.length < pageSize) {
         document.getElementById('harvests_footer')?.style.setProperty('display', 'none');
     }
 }
