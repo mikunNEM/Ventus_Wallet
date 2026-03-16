@@ -723,16 +723,17 @@ async function loadHarvestStatus(address) {
         if (statusEl) statusEl.innerHTML =
             `<span style="color:#4caf50;font-weight:bold;">✅ 委任ハーベスト 設定済み</span>`;
 
-        // ノードのホスト名を /node/peers から検索
+        // ノードのホスト名を nodewatch.symbol.tools で検索
         if (nodeEl) {
             nodeEl.innerHTML = `委任ノード: <i>検索中…</i>`;
             try {
-                const peersRes = await fetch(new URL('/node/peers', NODE));
-                const peers    = await peersRes.json();
-                const match    = (Array.isArray(peers) ? peers : peers.data ?? [])
-                    .find(p => p.publicKey === node);
-                nodeEl.innerHTML = match
-                    ? `委任ノード: <b>${match.host}</b>`
+                const net      = networkType === 104 ? 'mainnet' : 'testnet';
+                const watchUrl = `https://nodewatch.symbol.tools/${net}/api/symbol/nodes/peer?publicKey=${node}&limit=1`;
+                const watchRes = await fetch(watchUrl);
+                const watchData = await watchRes.json();
+                const host = watchData?.data?.[0]?.host ?? watchData?.[0]?.host;
+                nodeEl.innerHTML = host
+                    ? `委任ノード: <b>${host}</b>`
                     : `委任ノード公開鍵: <code>${node.slice(0, 16)}…</code>`;
             } catch {
                 nodeEl.innerHTML = `委任ノード公開鍵: <code>${node.slice(0, 16)}…</code>`;
