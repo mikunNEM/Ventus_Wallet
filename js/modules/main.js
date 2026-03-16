@@ -652,14 +652,20 @@ let harvestPageNumber = 0;
 
 async function getHarvests(pageSize, address) {
     harvestPageNumber++;
-    const res = await fetchJson(new URL(
-        `/statements/block?targetAddress=${address}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
-        NODE
-    ));
+    let res;
+    try {
+        res = await fetchJson(new URL(
+            `/statements/block?targetAddress=${address}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
+            NODE
+        ));
+    } catch (e) {
+        console.warn('[getHarvests] statements/block 取得失敗:', e.message);
+        return;
+    }
 
     let lastHeight = 0;
     let cnt = 0;
-    for (const item of res.data) {
+    for (const item of (res.data ?? [])) {
         // v3 REST API は { statement: { height, receipts } } の構造
         const stmt = item.statement ?? item;
         const filtered = (stmt.receipts || []).filter(r => {
@@ -738,34 +744,32 @@ async function loadHarvestStatus(address) {
 
         // ② 委任先ノードに直接アクセスして /node/unlockedaccount を確認
         if (statusEl) {
-            statusEl.innerHTML = `<span style="color:#aaa;">🔄 ハーベスト状態確認中…</span>`;
-            try {
-                const targetNode = host
-                    ? `https://${host}:3001`
-                    : NODE;  // ホスト不明の場合は現在のノードで代替確認
+            if (!host) {
+                // ホストが特定できない場合は確認不可（現在ノードで誤チェックしない）
+                statusEl.innerHTML = `<span style="color:#aaa;">❓ 確認不可</span>` +
+                    `<span style="color:#aaa;font-size:80%;"> (委任設定あり・ノード未特定)</span>`;
+            } else {
+                statusEl.innerHTML = `<span style="color:#aaa;">🔄 ハーベスト状態確認中…</span>`;
+                try {
+                    const targetNode = `https://${host}:3001`;
+                    const unlockedRes = await fetch(
+                        new URL('/node/unlockedaccount', targetNode),
+                        { signal: AbortSignal.timeout(6000) }
+                    );
+                    const unlockedData = await unlockedRes.json();
 
-                const unlockedRes = await fetch(
-                    new URL('/node/unlockedaccount', targetNode),
-                    { signal: AbortSignal.timeout(6000) }
-                );
-                const unlockedData = await unlockedRes.json();
+                    // unlockedAccounts にリモートキー（linked key）が含まれているか確認
+                    const accounts = unlockedData.unlockedAccounts ?? unlockedData ?? [];
+                    const isHarvesting = Array.isArray(accounts)
+                        && accounts.some(k => k === linked);
 
-                // unlockedAccounts にリモートキー（linked key）が含まれているか確認
-                const accounts = unlockedData.unlockedAccounts ?? unlockedData ?? [];
-                const isHarvesting = Array.isArray(accounts)
-                    && accounts.some(k => k === linked);
-
-                if (isHarvesting) {
-                    statusEl.innerHTML =
-                        `<span style="color:#4caf50;font-weight:bold;">🟢 有効</span>`;
-                } else {
-                    statusEl.innerHTML =
-                        `<span style="color:#f44336;font-weight:bold;">🔴 無効</span>`;
+                    statusEl.innerHTML = isHarvesting
+                        ? `<span style="color:#4caf50;font-weight:bold;">🟢 有効</span>`
+                        : `<span style="color:#f44336;font-weight:bold;">🔴 無効</span>`;
+                } catch {
+                    // ノードへのアクセス失敗（CORS 含む）
+                    statusEl.innerHTML = `<span style="color:#f44336;font-weight:bold;">🔴 無効</span>`;
                 }
-            } catch {
-                // ノードへのアクセス失敗（CORS 含む）
-                statusEl.innerHTML =
-                    `<span style="color:#f44336;font-weight:bold;">🔴 無効</span>`;
             }
         }
     } catch (e) {
