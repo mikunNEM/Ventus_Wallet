@@ -768,9 +768,11 @@ async function loadHarvestStatus(address) {
                     const unlockedData = await unlockedRes.json();
 
                     // unlockedAccounts にリモートキー（linked key）が含まれているか確認
+                    // 大文字小文字無視で比較（REST APIのレスポンス形式の違いに対応）
                     const accounts = unlockedData.unlockedAccounts ?? unlockedData ?? [];
+                    const linkedLower = linked.toLowerCase();
                     const isHarvesting = Array.isArray(accounts)
-                        && accounts.some(k => k === linked);
+                        && accounts.some(k => k.toLowerCase() === linkedLower);
 
                     statusEl.innerHTML = isHarvesting
                         ? `<span style="color:#4caf50;font-weight:bold;">🟢 有効</span>`
