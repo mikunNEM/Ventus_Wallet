@@ -2284,15 +2284,38 @@ async function Msig_account(activeAddress) {
     }
 
     try {
+        // ── 編集モード: マルチシグ本体の公開鍵を取得 ────────────────────────
+        // ・inner TX の signer = 変更対象マルチシグアカウント（TBC7GNV...）の pubKey
+        // ・outer AggregateBonded signer = SSS active（起案者連署者 TALC4BP...）の pubKey
+        // 参照: 09_multisig.md 9.5節
+        let innerTxPubKey = signerPubKey; // デフォルト: 新規設定時は自分自身
+        if (msigIsEditMode && _msigTargetAddress) {
+            try {
+                const msigAcct = await getAccountInfo(_msigTargetAddress);
+                innerTxPubKey = msigAcct.publicKey;
+                console.log('[Msig_account] edit mode innerTxPubKey:', innerTxPubKey, 'for', _msigTargetAddress);
+            } catch (e) {
+                throw new Error('マルチシグアカウントの公開鍵取得に失敗しました: ' + e.message);
+            }
+        }
+
         const innerTx = buildMultisigModificationEmbeddedTx(
-            minApprovalDelta, minRemovalDelta, addAddresses, removeAddresses, signerPubKey
+            minApprovalDelta, minRemovalDelta, addAddresses, removeAddresses, innerTxPubKey
         );
+
+        // ── cosigCount の決定 ────────────────────────────────────────────────
+        // 編集モード: 既存の連署者が承認に必要な数 (_currentMinApproval)
+        // 新規設定:   追加する連署者の数 (addAddresses.length)
+        const cosigCount = msigIsEditMode
+            ? Math.max(_currentMinApproval, 1)
+            : addAddresses.length;
 
         // ── Bonded先署名フロー ──────────────────────────────────────────
         // ① HashLock 残高確認（10 XYM 必要）
         await checkHashLockBalance(activeAddress);
         // ② AggregateBonded を先に署名（SSS ダイアログ1回目）
-        const aggregateBonded = buildAggregateBondedTx([innerTx], signerPubKey, addAddresses.length, 100);
+        // outer signer = signerPubKey (SSS active = 起案者の連署者)
+        const aggregateBonded = buildAggregateBondedTx([innerTx], signerPubKey, cosigCount, 100);
 
         const feeXym = Number(aggregateBonded.fee.value) / 1_000_000;
         const feeEl = document.getElementById('fee_Msig');
