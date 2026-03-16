@@ -2189,8 +2189,8 @@ async function Msig_account(activeAddress) {
         if (feeEl) feeEl.innerHTML = `<p style="font-size:20px;color:blue;">手数料　 ${feeXym.toLocaleString(undefined, { maximumFractionDigits: 6 })} XYM（+ HashLock 10 XYM）</p>`;
 
         const { payload: bondedSignedPayload, hash: bondedHashHex } = await signOnly(aggregateBonded);
-        // SSS が1回目ダイアログを完全に閉じるまで少し待つ
-        await new Promise(r => setTimeout(r, 1000));
+        // SSS が1回目ダイアログを完全に閉じるまで少し待つ（2秒 = 競合防止）
+        await new Promise(r => setTimeout(r, 2000));
         // signed payload を sessionStorage に保存（リロード後も残る）
         sessionStorage.setItem('_pendingBondedPayload', bondedSignedPayload);
 
@@ -2288,8 +2288,8 @@ async function handleSSS_multisig(activeAddress) {
             // ── Bonded先署名フロー ──────────────────────────────────────────
             // ① AggregateBonded を先に署名（SSS ダイアログ1回目）
             const { payload: bondedSignedPayload, hash: bondedHashHex } = await signOnly(aggregateBonded);
-            // SSS が1回目ダイアログを完全に閉じるまで少し待つ
-            await new Promise(r => setTimeout(r, 1000));
+            // SSS が1回目ダイアログを完全に閉じるまで少し待つ（2秒 = 競合防止）
+            await new Promise(r => setTimeout(r, 2000));
             sessionStorage.setItem('_pendingBondedPayload', bondedSignedPayload);
 
             // ② HashLock を署名してannounce（SSSが返したhashを使う）
