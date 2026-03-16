@@ -714,7 +714,7 @@ async function loadHarvestStatus(address) {
         const node   = supplKeys.node?.publicKey;    // NodeKeyLink（ノード識別子）
 
         if (!linked || !vrf || !node) {
-            if (statusEl) statusEl.innerHTML = `<span style="color:#aaa;">⚪ 委任未設定</span>`;
+            if (statusEl) statusEl.innerHTML = `<span style="color:#aaa;">⚫ 未設定</span>`;
             if (nodeEl)   nodeEl.innerHTML   = '';
             return;
         }
@@ -757,17 +757,17 @@ async function loadHarvestStatus(address) {
 
                 if (isHarvesting) {
                     statusEl.innerHTML =
-                        `<span style="color:#4caf50;font-weight:bold;">✅ ハーベスト中</span>`;
+                        `<span style="color:#4caf50;font-weight:bold;">🟢 有効</span>`;
                 } else {
                     statusEl.innerHTML =
-                        `<span style="color:#ff9800;font-weight:bold;">⚠️ 設定済み・未アクティブ</span>` +
-                        `<span style="color:#aaa;font-size:80%;"> (ノードに未登録の可能性)</span>`;
+                        `<span style="color:#f44336;font-weight:bold;">🔴 無効</span>` +
+                        `<span style="color:#aaa;font-size:80%;"> (ノードに未登録)</span>`;
                 }
             } catch {
                 // ノードへのアクセス失敗（CORS 含む）
                 statusEl.innerHTML =
-                    `<span style="color:#f44336;font-weight:bold;">❌ ノード接続失敗</span>` +
-                    `<span style="color:#aaa;font-size:80%;"> (委任設定は存在します)</span>`;
+                    `<span style="color:#f44336;font-weight:bold;">🔴 確認不可</span>` +
+                    `<span style="color:#aaa;font-size:80%;"> (委任設定あり・ノード応答なし)</span>`;
             }
         }
     } catch (e) {
