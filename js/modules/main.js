@@ -674,25 +674,25 @@ async function getHarvests(pageSize, address) {
     harvestPageNumber++;
 
     // リモートキー（supplementalPublicKeys.linked）でブロック検索
-    // ※ delegated harvesting では signerPublicKey = リモートキー
     const accountInfo = await getAccountInfo(address);
     const remoteKey = accountInfo?.supplementalPublicKeys?.linked?.publicKey;
 
     if (!remoteKey) {
-        console.warn('[getHarvests] リモートキーが未設定：委任ハーベストが設定されていません');
+        console.warn('[getHarvests] リモートキーが未設定');
         return;
     }
 
     // 接続中ノード → フォールバックノード の順に試みる
     const nodesToTry = [NODE, ...(HARVEST_FALLBACK_NODES[networkType] ?? [])];
     let res = null;
+    let successNode = null;
     for (const nodeUrl of nodesToTry) {
         try {
             res = await fetchJson(new URL(
                 `/blocks?signerPublicKey=${remoteKey}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
                 nodeUrl
             ));
-            console.log('[getHarvests] success with node:', nodeUrl, 'blocks:', res.data?.length ?? 0);
+            successNode = nodeUrl;
             break;
         } catch (e) {
             console.warn(`[getHarvests] 失敗 (${nodeUrl}):`, e.message);
@@ -704,9 +704,37 @@ async function getHarvests(pageSize, address) {
         return;
     }
 
-    for (const item of (res.data ?? [])) {
-        const block = item.block;
-        showHarvestBlockRow(block.height, block.timestamp, block.totalFee ?? '0');
+    const blocks = res.data ?? [];
+
+    // 各ブロックのハーベスト手数料レシートを並行取得
+    // /statements/transaction?height={h} → type:8515 (HarvestFee) を抽出
+    const receiptPromises = blocks.map(item =>
+        fetchJson(new URL(
+            `/statements/transaction?height=${item.block.height}`,
+            successNode ?? NODE
+        )).catch(() => null)
+    );
+    const receiptsResults = await Promise.all(receiptPromises);
+
+    for (let i = 0; i < blocks.length; i++) {
+        const block = blocks[i].block;
+        const stmts = receiptsResults[i];
+
+        // type=8515 (HarvestFee) かつ targetAddress が自アカウントのものを合計
+        let harvestAmount = 0n;
+        for (const stmt of (stmts?.data ?? [])) {
+            const s = stmt.statement ?? stmt;
+            for (const r of (s.receipts ?? [])) {
+                if (r.type === 8515) {
+                    const ta = r.targetAddress ?? '';
+                    if ((ta.length === 48 ? hexToAddress(ta) : ta) === address) {
+                        harvestAmount += BigInt(r.amount ?? 0);
+                    }
+                }
+            }
+        }
+
+        showHarvestBlockRow(block.height, block.timestamp, harvestAmount.toString());
     }
 
     if (res.pagination?.pageNumber >= res.pagination?.pageSize) {
