@@ -2194,10 +2194,10 @@ async function Msig_account(activeAddress) {
         // signed payload を sessionStorage に保存（リロード後も残る）
         sessionStorage.setItem('_pendingBondedPayload', bondedSignedPayload);
 
-        // ② HashLock を署名してannounce（SSSが返したhashを使う）
+        // ② HashLock を署名してannounce（signOnly でSSSのhashを確実に取得 → announce）
         const hashLockTx = buildHashLockTx(bondedHashHex, signerPubKey, XYM_ID);
-        const hashLockTxHash = sdkCore.utils.uint8ToHex(facade.hashTransaction(hashLockTx).bytes);
-        await signAndAnnounce(hashLockTx);
+        const { payload: hashLockPayload, hash: hashLockTxHash } = await signOnly(hashLockTx);
+        await announceTransaction(hashLockPayload);
 
         Swal.fire({ title: 'Hash Lock 送信済み', text: 'ブロックチェーンの承認を待っています...', icon: 'info', timer: 5000, showConfirmButton: false });
 
@@ -2292,10 +2292,10 @@ async function handleSSS_multisig(activeAddress) {
             await new Promise(r => setTimeout(r, 2000));
             sessionStorage.setItem('_pendingBondedPayload', bondedSignedPayload);
 
-            // ② HashLock を署名してannounce（SSSが返したhashを使う）
+            // ② HashLock を署名してannounce（signOnly でSSSのhashを確実に取得 → announce）
             const hashLockTx = buildHashLockTx(bondedHashHex, signerPubKey, XYM_ID);
-            const hashLockTxHash = sdkCore.utils.uint8ToHex(facade.hashTransaction(hashLockTx).bytes);
-            await signAndAnnounce(hashLockTx);
+            const { payload: hashLockPayload, hash: hashLockTxHash } = await signOnly(hashLockTx);
+            await announceTransaction(hashLockPayload);
 
             Swal.fire({ title: 'Hash Lock 送信済み', text: 'ブロックチェーンの承認を待っています...', icon: 'info', timer: 5000, showConfirmButton: false });
 
