@@ -650,16 +650,44 @@ async function initAccountDisplay(accountData) {
 
 let harvestPageNumber = 0;
 
+// ハーベスト履歴取得時のフォールバックノードリスト
+const HARVEST_FALLBACK_NODES = {
+    104: [  // mainnet
+        'https://00.symbol-node.com:3001',
+        'https://01.symbol-node.com:3001',
+        'https://symbol-mikun.net:3001',
+    ],
+    152: [  // testnet
+        'https://001.testnet.symboldev.network:3001',
+        'https://sym-test-01.opening-line.jp:3001',
+    ],
+};
+
+async function fetchHarvestStatements(nodeUrl, address, pageNum, pageSize) {
+    return fetchJson(new URL(
+        `/statements/block?targetAddress=${address}&pageNumber=${pageNum}&pageSize=${pageSize}&order=desc`,
+        nodeUrl
+    ));
+}
+
 async function getHarvests(pageSize, address) {
     harvestPageNumber++;
-    let res;
-    try {
-        res = await fetchJson(new URL(
-            `/statements/block?targetAddress=${address}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
-            NODE
-        ));
-    } catch (e) {
-        console.warn('[getHarvests] statements/block 取得失敗:', e.message);
+
+    // 接続中ノード → フォールバックノード の順に試みる
+    const nodesToTry = [NODE, ...(HARVEST_FALLBACK_NODES[networkType] ?? [])];
+    let res = null;
+    for (const nodeUrl of nodesToTry) {
+        try {
+            res = await fetchHarvestStatements(nodeUrl, address, harvestPageNumber, pageSize);
+            console.log('[getHarvests] success with node:', nodeUrl);
+            break;
+        } catch (e) {
+            console.warn(`[getHarvests] 失敗 (${nodeUrl}):`, e.message);
+        }
+    }
+
+    if (!res) {
+        console.warn('[getHarvests] 全ノードで取得失敗');
         return;
     }
 
