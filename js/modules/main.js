@@ -2143,9 +2143,10 @@ async function waitForHashLockConfirmed(hashHex, onRetry = null) {
     const node = window.ventus_NODE;
     if (!node) throw new Error('NODE not initialized');
 
-    // ── Phase 1 チェック（30秒・3秒間隔）を最大2回試みる ───────────────────
+    // ── Phase 1: unconfirmed/confirmed チェック（90秒・2秒間隔）────────────
+    // ノードが TX を受理してから mempool に反映するまで遅延があるため 90 秒確保
     const tryPhase1 = async () => {
-        const deadline = Date.now() + 30_000;
+        const deadline = Date.now() + 90_000;
         while (Date.now() < deadline) {
             try {
                 const res = await fetch(new URL(`/transactions/confirmed/${hashHex}`, node));
@@ -2155,14 +2156,14 @@ async function waitForHashLockConfirmed(hashHex, onRetry = null) {
                 const res = await fetch(new URL(`/transactions/unconfirmed/${hashHex}`, node));
                 if (res.ok) return 'mempool';
             } catch {}
-            await new Promise(r => setTimeout(r, 3_000));
+            await new Promise(r => setTimeout(r, 2_000));
         }
         return 'not_found';
     };
 
     let phase1Result = await tryPhase1();
 
-    if (phase1Result === 'confirmed') return; // 即承認
+    if (phase1Result === 'confirmed') return;
 
     if (phase1Result === 'not_found' && onRetry) {
         // ── 1回だけリトライ: 再アナウンスして再チェック ────────────────────
@@ -2180,7 +2181,7 @@ async function waitForHashLockConfirmed(hashHex, onRetry = null) {
     if (phase1Result === 'not_found') {
         throw new Error(
             'HashLock TX がメモリプールに到達しませんでした。\n' +
-            '再アナウンスを試みましたが、ノードに受理されませんでした。しばらくしてから再試行してください。'
+            'ページをリロードすると自動的に再送されます。'
         );
     }
 
@@ -2194,7 +2195,7 @@ async function waitForHashLockConfirmed(hashHex, onRetry = null) {
         } catch {}
         await new Promise(r => setTimeout(r, 5_000));
     }
-    throw new Error('HashLock の承認タイムアウト（300秒）。ネットワークを確認してください。');
+    throw new Error('HashLock の承認タイムアウト（300秒）。ページをリロードすると自動的に再送されます。');
 }
 
 async function Msig_account(activeAddress) {
