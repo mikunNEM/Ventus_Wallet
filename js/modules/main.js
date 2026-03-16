@@ -653,13 +653,15 @@ let harvestPageNumber = 0;
 async function getHarvests(pageSize, address) {
     harvestPageNumber++;
     const res = await fetchJson(new URL(
-        `/statements/transaction?targetAddress=${address}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
+        `/statements/block?targetAddress=${address}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
         NODE
     ));
 
     let lastHeight = 0;
     let cnt = 0;
-    for (const stmt of res.data) {
+    for (const item of res.data) {
+        // v3 REST API は { statement: { height, receipts } } の構造
+        const stmt = item.statement ?? item;
         const filtered = (stmt.receipts || []).filter(r => {
             const ta = r.targetAddress;
             if (!ta) return false;
@@ -693,6 +695,52 @@ function showReceiptInfo(tag, height, receipt, cnt) {
         const el = document.getElementById(`${tag}_date${height}${receipt.type}${cntStr}`);
         if (el) el.textContent = dispTimeStamp(Number(block.timestamp), epochAdjustment);
     });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 委任ハーベスト ステータス表示
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadHarvestStatus(address) {
+    const statusEl = document.getElementById('hv_status');
+    const nodeEl   = document.getElementById('hv_node');
+    if (!statusEl && !nodeEl) return;
+
+    try {
+        const accountInfo = await getAccountInfo(address);
+        const supplKeys = accountInfo?.supplementalPublicKeys ?? {};
+        const linked = supplKeys.linked?.publicKey;
+        const vrf    = supplKeys.vrf?.publicKey;
+        const node   = supplKeys.node?.publicKey;
+
+        if (!linked || !vrf || !node) {
+            if (statusEl) statusEl.innerHTML = `<span style="color:#aaa;">⚪ 委任未設定</span>`;
+            if (nodeEl)   nodeEl.innerHTML   = '';
+            return;
+        }
+
+        // 委任設定済み
+        if (statusEl) statusEl.innerHTML =
+            `<span style="color:#4caf50;font-weight:bold;">✅ 委任ハーベスト 設定済み</span>`;
+
+        // ノードのホスト名を /node/peers から検索
+        if (nodeEl) {
+            nodeEl.innerHTML = `委任ノード: <i>検索中…</i>`;
+            try {
+                const peersRes = await fetch(new URL('/node/peers', NODE));
+                const peers    = await peersRes.json();
+                const match    = (Array.isArray(peers) ? peers : peers.data ?? [])
+                    .find(p => p.publicKey === node);
+                nodeEl.innerHTML = match
+                    ? `委任ノード: <b>${match.host}</b>`
+                    : `委任ノード公開鍵: <code>${node.slice(0, 16)}…</code>`;
+            } catch {
+                nodeEl.innerHTML = `委任ノード公開鍵: <code>${node.slice(0, 16)}…</code>`;
+            }
+        }
+    } catch (e) {
+        console.warn('[loadHarvestStatus]', e.message);
+    }
 }
 
 
@@ -1224,6 +1272,7 @@ async function main() {
     });
 
     // ハーベスト表示
+    loadHarvestStatus(activeAddress);   // 委任ノード・ステータス表示（非同期・並行）
     await getHarvests(15, activeAddress);
     document.getElementById('harvests_more')?.addEventListener('click', () => getHarvests(15, activeAddress));
 
