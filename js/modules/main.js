@@ -673,13 +673,26 @@ async function fetchHarvestStatements(nodeUrl, address, pageNum, pageSize) {
 async function getHarvests(pageSize, address) {
     harvestPageNumber++;
 
+    // リモートキー（supplementalPublicKeys.linked）でブロック検索
+    // ※ delegated harvesting では signerPublicKey = リモートキー
+    const accountInfo = await getAccountInfo(address);
+    const remoteKey = accountInfo?.supplementalPublicKeys?.linked?.publicKey;
+
+    if (!remoteKey) {
+        console.warn('[getHarvests] リモートキーが未設定：委任ハーベストが設定されていません');
+        return;
+    }
+
     // 接続中ノード → フォールバックノード の順に試みる
     const nodesToTry = [NODE, ...(HARVEST_FALLBACK_NODES[networkType] ?? [])];
     let res = null;
     for (const nodeUrl of nodesToTry) {
         try {
-            res = await fetchHarvestStatements(nodeUrl, address, harvestPageNumber, pageSize);
-            console.log('[getHarvests] success with node:', nodeUrl);
+            res = await fetchJson(new URL(
+                `/blocks?signerPublicKey=${remoteKey}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
+                nodeUrl
+            ));
+            console.log('[getHarvests] success with node:', nodeUrl, 'blocks:', res.data?.length ?? 0);
             break;
         } catch (e) {
             console.warn(`[getHarvests] 失敗 (${nodeUrl}):`, e.message);
@@ -691,25 +704,12 @@ async function getHarvests(pageSize, address) {
         return;
     }
 
-    let lastHeight = 0;
-    let cnt = 0;
     for (const item of (res.data ?? [])) {
-        // v3 REST API は { statement: { height, receipts } } の構造
-        const stmt = item.statement ?? item;
-        const filtered = (stmt.receipts || []).filter(r => {
-            const ta = r.targetAddress;
-            if (!ta) return false;
-            return (ta.length === 48 ? hexToAddress(ta) : ta) === address;
-        });
-        if (stmt.height !== lastHeight) cnt = 0;
-        for (const receipt of filtered) {
-            showReceiptInfo('harvest', stmt.height, receipt, cnt);
-            lastHeight = stmt.height;
-            cnt++;
-        }
+        const block = item.block;
+        showHarvestBlockRow(block.height, block.timestamp, block.totalFee ?? '0');
     }
 
-    if (res.pagination?.pageNumber >= res.pagination?.totalEntries / pageSize) {
+    if (res.pagination?.pageNumber >= res.pagination?.pageSize) {
         document.getElementById('harvests_footer')?.style.setProperty('display', 'none');
     }
 }
@@ -729,6 +729,22 @@ function showReceiptInfo(tag, height, receipt, cnt) {
         const el = document.getElementById(`${tag}_date${height}${receipt.type}${cntStr}`);
         if (el) el.textContent = dispTimeStamp(Number(block.timestamp), epochAdjustment);
     });
+}
+
+/**
+ * ハーベストブロック1行を harvest テーブルに追加（blocks API用）
+ * ブロックデータに timestamp が含まれるため getBlockByHeight 不要
+ */
+function showHarvestBlockRow(height, timestamp, totalFeeStr) {
+    const table = document.getElementById('harvest');
+    if (!table) return;
+    const row = document.createElement('tr');
+    const fee  = Number(totalFeeStr ?? 0);
+    row.innerHTML =
+        `<td>${dispTimeStamp(Number(timestamp), epochAdjustment)}</td>`
+        + `<td style="font-size:84%;"><a target="_blank" href="${EXPLORER}/blocks/${height}">${height}</a></td>`
+        + `<td class="text-right">${dispAmount(String(fee), 6)} XYM</td>`;
+    table.appendChild(row);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
