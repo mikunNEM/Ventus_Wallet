@@ -648,7 +648,7 @@ async function initAccountDisplay(accountData) {
 // ハーベスト表示
 // ─────────────────────────────────────────────────────────────────────────────
 
-let harvestPageNumber = 0;
+let harvestLastMinHeight = null; // カーソルベースのページネーション用
 
 // ハーベスト履歴取得時のフォールバックノードリスト
 const HARVEST_FALLBACK_NODES = {
@@ -671,10 +671,13 @@ async function fetchHarvestStatements(nodeUrl, address, pageNum, pageSize) {
 }
 
 async function getHarvests(pageSize, address) {
-    harvestPageNumber++;
-
     const accountInfo = await getAccountInfo(address);
     const remoteKey   = accountInfo?.supplementalPublicKeys?.linked?.publicKey;
+
+    // カーソル: 直前ページの最小ブロック高の1つ前まで取得（初回はフィルタなし）
+    const heightFilter = harvestLastMinHeight
+        ? `&toHeight=${BigInt(harvestLastMinHeight) - 1n}`
+        : '';
 
     // 接続中ノード → フォールバックノード の順に試みる
     const nodesToTry = [NODE, ...(HARVEST_FALLBACK_NODES[networkType] ?? [])];
@@ -688,13 +691,13 @@ async function getHarvests(pageSize, address) {
             // ①自分のリモートキーがサイナーのブロック（直接ハーベスト）
             if (remoteKey) {
                 promises.push(fetchJson(new URL(
-                    `/blocks?signerPublicKey=${remoteKey}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
+                    `/blocks?signerPublicKey=${remoteKey}&pageSize=${pageSize}&order=desc${heightFilter}`,
                     nodeUrl
                 )));
             }
             // ②自分のアドレスが受益者のブロック（ノード運営の25%手数料）
             promises.push(fetchJson(new URL(
-                `/blocks?beneficiaryAddress=${address}&pageNumber=${harvestPageNumber}&pageSize=${pageSize}&order=desc`,
+                `/blocks?beneficiaryAddress=${address}&pageSize=${pageSize}&order=desc${heightFilter}`,
                 nodeUrl
             )));
 
@@ -713,15 +716,21 @@ async function getHarvests(pageSize, address) {
         return;
     }
 
-    // ブロック高でマージ・重複排除 → 高さ降順でソート
+    // ブロック高でマージ・重複排除 → 高さ降順でソート → pageSize件に切り捨て
     const blockMap = new Map();
     for (const item of (res1?.data ?? [])) blockMap.set(item.block.height, item.block);
     for (const item of (res2?.data ?? [])) {
         if (!blockMap.has(item.block.height)) blockMap.set(item.block.height, item.block);
     }
-    const blocks = [...blockMap.values()].sort(
+    const allBlocks = [...blockMap.values()].sort(
         (a, b) => (BigInt(b.height) > BigInt(a.height) ? 1 : -1)
     );
+    const blocks = allBlocks.slice(0, pageSize);
+
+    // カーソルを更新（次ページで使う最小高）
+    if (blocks.length > 0) {
+        harvestLastMinHeight = blocks[blocks.length - 1].height;
+    }
 
     // 各ブロックのレシートを並行取得
     const receiptPromises = blocks.map(block =>
@@ -751,11 +760,13 @@ async function getHarvests(pageSize, address) {
         showHarvestBlockRow(block.height, block.timestamp, harvestAmount.toString());
     }
 
-    // さらに読み込むボタンの表示制御
-    if (blocks.length < pageSize) {
+    // さらに読み込むボタンの表示制御：両方のクエリが空なら非表示
+    if (allBlocks.length < pageSize) {
         document.getElementById('harvests_footer')?.style.setProperty('display', 'none');
     }
 }
+
+
 
 function showReceiptInfo(tag, height, receipt, cnt) {
     const cntStr = cnt === 0 ? '' : cnt;
