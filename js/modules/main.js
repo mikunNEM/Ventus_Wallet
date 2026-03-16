@@ -266,6 +266,7 @@ function connectWebSocket(activeAddress, onConfirmed, onUnconfirmed, onPartialAd
             ws.send(JSON.stringify({ uid: wsUid, subscribe: `confirmedAdded/${activeAddress}` }));
             ws.send(JSON.stringify({ uid: wsUid, subscribe: `unconfirmedAdded/${activeAddress}` }));
             ws.send(JSON.stringify({ uid: wsUid, subscribe: `partialAdded/${activeAddress}` }));
+            ws.send(JSON.stringify({ uid: wsUid, subscribe: `partialRemoved/${activeAddress}` }));
             return;
         }
 
@@ -284,6 +285,8 @@ function connectWebSocket(activeAddress, onConfirmed, onUnconfirmed, onPartialAd
         } else if (topic.startsWith('partialAdded/')) {
             console.log('[WS] partial (multisig sign request):', msg.data);
             if (onPartialAdded) onPartialAdded(msg.data);
+        } else if (topic.startsWith('partialRemoved/')) {
+            console.error('[WS] ❌ partialRemoved! TX が Partial プールから除去されました（ノードに拒否）:', msg.data);
         }
     };
 
