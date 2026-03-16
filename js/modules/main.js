@@ -726,14 +726,23 @@ async function loadHarvestStatus(address) {
         }
 
         // ① nodewatch でホスト名を解決
+        // メインネット: /api/symbol/... (prefixなし)
+        // テストネット: /testnet/api/symbol/...
         let host = null;
         try {
-            const net      = networkType === 104 ? 'mainnet' : 'testnet';
+            const prefix  = networkType === 104 ? '' : 'testnet/';
             const watchRes = await fetch(
-                `https://nodewatch.symbol.tools/${net}/api/symbol/nodes/peer?publicKey=${node}&limit=1`
+                `https://nodewatch.symbol.tools/${prefix}api/symbol/nodes/peer?only_ssl=true&limit=300&order=random`
             );
             const watchData = await watchRes.json();
-            host = watchData?.data?.[0]?.host ?? watchData?.[0]?.host ?? null;
+            // レスポンスは配列直接。各ノードは endpoint(URL形式) と publicKey フィールドを持つ
+            const nodes = Array.isArray(watchData) ? watchData : (watchData.data ?? []);
+            const match = nodes.find(n =>
+                (n.publicKey ?? n.nodePublicKey ?? '').toLowerCase() === node.toLowerCase()
+            );
+            if (match?.endpoint) {
+                host = new URL(match.endpoint).hostname;
+            }
         } catch { /* フォールバック */ }
 
         if (nodeEl) {
