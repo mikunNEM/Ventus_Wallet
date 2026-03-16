@@ -660,7 +660,11 @@ async function getHarvests(pageSize, address) {
     let lastHeight = 0;
     let cnt = 0;
     for (const stmt of res.data) {
-        const filtered = (stmt.receipts || []).filter(r => r.targetAddress === address);
+        const filtered = (stmt.receipts || []).filter(r => {
+            const ta = r.targetAddress;
+            if (!ta) return false;
+            return (ta.length === 48 ? hexToAddress(ta) : ta) === address;
+        });
         if (stmt.height !== lastHeight) cnt = 0;
         for (const receipt of filtered) {
             showReceiptInfo('harvest', stmt.height, receipt, cnt);
@@ -1277,6 +1281,7 @@ async function main() {
     window.loadMsigPanelInfo = () => loadMsigPanelInfo();
     window.handleSSS_multisig = () => handleSSS_multisig(activeAddress);
     window.handleSSS_dona = () => handleSSS_dona(activeAddress);
+    window.handleSSS_harvest = () => handleSSS_harvest(activeAddress);
 
     // 追加グローバル関数（v3移植・復元分）
     window.loadMsigPanelInfo  = () => loadMsigPanelInfo();
@@ -1363,6 +1368,7 @@ async function initAccountAndUI() {
     window.loadMsigPanelInfo = () => loadMsigPanelInfo();
     window.handleSSS_multisig = () => handleSSS_multisig(addr);
     window.handleSSS_dona = () => handleSSS_dona(addr);
+    window.handleSSS_harvest = () => handleSSS_harvest(addr);
     window.loadMsigPanelInfo = () => loadMsigPanelInfo();
     window.loadMsigTree = () => loadMsigTree();
     window.loadMsigSendModal = () => loadMsigSendModal();
@@ -2490,6 +2496,123 @@ async function handleSSS_dona(activeAddress) {
     } catch (e) {
         console.error('[handleSSS_dona]', e);
         Swal.fire({ title: '送信失敗', text: e.message, icon: 'error' });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ワンクリックハーベスティング（委任設定 v3）
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function handleSSS_harvest(activeAddress) {
+    // ノード入力値を取得
+    const nodeHost = document.getElementById('node')?.value?.trim();
+    if (!nodeHost) {
+        Swal.fire({ title: 'ノードを入力してください', icon: 'warning' }); return;
+    }
+
+    const targetNode = nodeHost.startsWith('http') ? nodeHost : `https://${nodeHost}:3001`;
+
+    try {
+        // ② ノード情報取得（nodePublicKey・ネットワーク確認）
+        let nodeInfoJson;
+        try {
+            const r = await fetch(new URL('/node/info', targetNode));
+            nodeInfoJson = await r.json();
+        } catch (e) {
+            throw new Error(`ノード情報の取得に失敗しました: ${e.message}`);
+        }
+        const nodePubKeyHex  = nodeInfoJson.nodePublicKey;
+        const nodeNetworkId  = nodeInfoJson.networkIdentifier; // 104 or 152
+        if (!nodePubKeyHex) throw new Error('ノードの公開鍵が取得できませんでした');
+        if (nodeNetworkId !== networkType) {
+            Swal.fire({ title: 'ネットワークタイプが異なります', text: '別のノードを選択してください', icon: 'error' });
+            return;
+        }
+
+        // ③ アカウント情報取得（supplementalPublicKeys でキーリンク済か確認）
+        const accountInfo = await getAccountInfo(activeAddress);
+        if (!accountInfo) throw new Error('アカウント情報が取得できませんでした');
+        const supplKeys = accountInfo.supplementalPublicKeys ?? {};
+
+        const signerPubKey = window.SSS.activePublicKey;
+        const innerTxs     = [];
+
+        // ④ リモートアカウント・VRF アカウントを新規生成
+        const remoteKeyPair = new sdkSymbol.KeyPair(sdkCore.PrivateKey.random());
+        const vrfKeyPair    = new sdkSymbol.KeyPair(sdkCore.PrivateKey.random());
+
+        // LinkAction: 1 = Link, 0 = Unlink
+        const LINK   = 1;
+        const UNLINK = 0;
+
+        // ⑤ 既存キーを Unlink（委任先ノード変更時に必要）
+        if (supplKeys.linked?.publicKey) {
+            innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+                new sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
+                    new sdkCore.PublicKey(supplKeys.linked.publicKey), UNLINK
+                ), signerPubKey
+            ));
+        }
+        if (supplKeys.vrf?.publicKey) {
+            innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+                new sdkSymbol.descriptors.VrfKeyLinkTransactionV1Descriptor(
+                    new sdkCore.PublicKey(supplKeys.vrf.publicKey), UNLINK
+                ), signerPubKey
+            ));
+        }
+        if (supplKeys.node?.publicKey) {
+            innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+                new sdkSymbol.descriptors.NodeKeyLinkTransactionV1Descriptor(
+                    new sdkCore.PublicKey(supplKeys.node.publicKey), UNLINK
+                ), signerPubKey
+            ));
+        }
+
+        // ⑥ 新しいキーを Link
+        innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+            new sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
+                remoteKeyPair.publicKey, LINK
+            ), signerPubKey
+        ));
+        innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+            new sdkSymbol.descriptors.VrfKeyLinkTransactionV1Descriptor(
+                vrfKeyPair.publicKey, LINK
+            ), signerPubKey
+        ));
+        innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+            new sdkSymbol.descriptors.NodeKeyLinkTransactionV1Descriptor(
+                new sdkCore.PublicKey(nodePubKeyHex), LINK
+            ), signerPubKey
+        ));
+
+        // ⑦ PersistentDelegationRequest（Transfer with 0xFE marker）
+        // MessageEncoder.encodePersistentHarvestingDelegation を使用
+        const msgEncoder   = new sdkSymbol.MessageEncoder(remoteKeyPair.privateKey);
+        const persistentMsg = msgEncoder.encodePersistentHarvestingDelegation(
+            new sdkCore.PublicKey(nodePubKeyHex),
+            remoteKeyPair,
+            vrfKeyPair
+        );
+        const nodeAddress = facade.network.publicKeyToAddress(
+            new sdkCore.PublicKey(nodePubKeyHex)
+        );
+        innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+            new sdkSymbol.descriptors.TransferTransactionV1Descriptor(
+                nodeAddress.toString(), [], persistentMsg
+            ), signerPubKey
+        ));
+
+        // ⑧ AggregateComplete として署名・アナウンス
+        const aggregateTx = buildAggregateCompleteTx(innerTxs, signerPubKey, 0, 100);
+        const feeXym = Number(aggregateTx.fee.value) / 1_000_000;
+        console.log(`[handleSSS_harvest] txs: ${innerTxs.length}, fee: ${feeXym} XYM`);
+
+        await signAndAnnounce(aggregateTx);
+        Swal.fire({ title: '委任設定を送信しました！', text: 'ハーベスト開始まで少し時間がかかります。', icon: 'success' });
+
+    } catch (e) {
+        console.error('[handleSSS_harvest]', e);
+        Swal.fire({ title: '委任設定失敗', text: e.message, icon: 'error' });
     }
 }
 
