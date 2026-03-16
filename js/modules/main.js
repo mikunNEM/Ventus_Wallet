@@ -709,9 +709,9 @@ async function loadHarvestStatus(address) {
     try {
         const accountInfo = await getAccountInfo(address);
         const supplKeys = accountInfo?.supplementalPublicKeys ?? {};
-        const linked = supplKeys.linked?.publicKey;
+        const linked = supplKeys.linked?.publicKey;  // リモートキー（harvester 識別子）
         const vrf    = supplKeys.vrf?.publicKey;
-        const node   = supplKeys.node?.publicKey;
+        const node   = supplKeys.node?.publicKey;    // NodeKeyLink（ノード識別子）
 
         if (!linked || !vrf || !node) {
             if (statusEl) statusEl.innerHTML = `<span style="color:#aaa;">⚪ 委任未設定</span>`;
@@ -719,24 +719,55 @@ async function loadHarvestStatus(address) {
             return;
         }
 
-        // 委任設定済み
-        if (statusEl) statusEl.innerHTML =
-            `<span style="color:#4caf50;font-weight:bold;">✅ 委任ハーベスト 設定済み</span>`;
+        // ① nodewatch でホスト名を解決
+        let host = null;
+        try {
+            const net      = networkType === 104 ? 'mainnet' : 'testnet';
+            const watchRes = await fetch(
+                `https://nodewatch.symbol.tools/${net}/api/symbol/nodes/peer?publicKey=${node}&limit=1`
+            );
+            const watchData = await watchRes.json();
+            host = watchData?.data?.[0]?.host ?? watchData?.[0]?.host ?? null;
+        } catch { /* フォールバック */ }
 
-        // ノードのホスト名を nodewatch.symbol.tools で検索
         if (nodeEl) {
-            nodeEl.innerHTML = `委任ノード: <i>検索中…</i>`;
+            nodeEl.innerHTML = host
+                ? `委任ノード: <b>${host}</b>`
+                : `委任ノード公開鍵: <code>${node.slice(0, 16)}…</code>`;
+        }
+
+        // ② 委任先ノードに直接アクセスして /node/unlockedaccount を確認
+        if (statusEl) {
+            statusEl.innerHTML = `<span style="color:#aaa;">🔄 ハーベスト状態確認中…</span>`;
             try {
-                const net      = networkType === 104 ? 'mainnet' : 'testnet';
-                const watchUrl = `https://nodewatch.symbol.tools/${net}/api/symbol/nodes/peer?publicKey=${node}&limit=1`;
-                const watchRes = await fetch(watchUrl);
-                const watchData = await watchRes.json();
-                const host = watchData?.data?.[0]?.host ?? watchData?.[0]?.host;
-                nodeEl.innerHTML = host
-                    ? `委任ノード: <b>${host}</b>`
-                    : `委任ノード公開鍵: <code>${node.slice(0, 16)}…</code>`;
+                const targetNode = host
+                    ? `https://${host}:3001`
+                    : NODE;  // ホスト不明の場合は現在のノードで代替確認
+
+                const unlockedRes = await fetch(
+                    new URL('/node/unlockedaccount', targetNode),
+                    { signal: AbortSignal.timeout(6000) }
+                );
+                const unlockedData = await unlockedRes.json();
+
+                // unlockedAccounts にリモートキー（linked key）が含まれているか確認
+                const accounts = unlockedData.unlockedAccounts ?? unlockedData ?? [];
+                const isHarvesting = Array.isArray(accounts)
+                    && accounts.some(k => k === linked);
+
+                if (isHarvesting) {
+                    statusEl.innerHTML =
+                        `<span style="color:#4caf50;font-weight:bold;">✅ ハーベスト中</span>`;
+                } else {
+                    statusEl.innerHTML =
+                        `<span style="color:#ff9800;font-weight:bold;">⚠️ 設定済み・未アクティブ</span>` +
+                        `<span style="color:#aaa;font-size:80%;"> (ノードに未登録の可能性)</span>`;
+                }
             } catch {
-                nodeEl.innerHTML = `委任ノード公開鍵: <code>${node.slice(0, 16)}…</code>`;
+                // ノードへのアクセス失敗（CORS 含む）
+                statusEl.innerHTML =
+                    `<span style="color:#f44336;font-weight:bold;">❌ ノード接続失敗</span>` +
+                    `<span style="color:#aaa;font-size:80%;"> (委任設定は存在します)</span>`;
             }
         }
     } catch (e) {
