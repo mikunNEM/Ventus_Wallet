@@ -2250,6 +2250,22 @@ async function Msig_account(activeAddress) {
     const addAddresses = [...cosigList];
     const removeAddresses = [...deleteList];
 
+    // ── デバッグ: 入力値確認 ──────────────────────────────────────────────
+    const derivedAddress = publicKeyToAddress(signerPubKey);
+    console.log('[Msig_account] activeAddress:', activeAddress);
+    console.log('[Msig_account] signerPubKey:', signerPubKey);
+    console.log('[Msig_account] derived addr from pubKey:', derivedAddress);
+    console.log('[Msig_account] addr match:', activeAddress === derivedAddress);
+    console.log('[Msig_account] addAddresses:', JSON.stringify(addAddresses));
+    console.log('[Msig_account] removeAddresses:', JSON.stringify(removeAddresses));
+    console.log('[Msig_account] network:', networkType === 104 ? 'mainnet' : 'testnet', '(', networkType, ')');
+
+    // ── バリデーション: 自分自身を連署者に追加していないか確認 ────────────
+    if (addAddresses.includes(activeAddress) || addAddresses.includes(derivedAddress)) {
+        Swal.fire({ title: 'エラー', text: '自分自身を連署者に追加することはできません。', icon: 'error' });
+        return;
+    }
+
     if (addAddresses.length === 0 && removeAddresses.length === 0) {
         Swal.fire({ title: '連署者を追加または削除してください。', icon: 'warning' }); return;
     }
