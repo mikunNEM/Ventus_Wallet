@@ -66,7 +66,7 @@ import {
     buildMultisigModificationEmbeddedTx,
 } from './transactions.js';
 
-import { nftdrive, comsaNFT, comsaNCFT, ukraineNFT } from './nft.js';
+import { nftdrive, comsaNFT, comsaNCFT, ukraineNFT, nftCacheGet, nftCacheSet } from './nft.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ユーティリティ（v2から移植、SDK非依存）
@@ -520,32 +520,243 @@ async function initAccountDisplay(accountData) {
         return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
     });
 
-    // セレクトボックスを生成（リストを引数で受け取る汎用版）
-    const buildSelect = (container, cssClass, list) => {
-        if (!container) return null;
-        container.querySelectorAll('select').forEach(s => s.remove());
+    // ── モザイクサムネイル取得ヘルパー ──────────────────────────────────────
+    // IndexedDB キャッシュ優先: NFTDrive > COMSA > Ukraine > Mosaic Center
+    const MOSAIC_CENTER_CACHE_PREFIX = 'mosaicCenter_';
+
+    async function getMosaicThumbUrl(mosaicIdHex) {
+        const id = mosaicIdHex.toUpperCase();
+        if (XYM_ID && id === XYM_ID.toUpperCase()) return null;
+
+        // ① キャッシュ確認
+        const cached =
+            await nftCacheGet(`nftdrive_${id}`) ??
+            await nftCacheGet(`comsa10_${id}`) ??
+            await nftCacheGet(`comsa11_${id}`) ??
+            await nftCacheGet(`comsancft_${id}`) ??
+            await nftCacheGet(`ukraine_${id}`) ??
+            await nftCacheGet(`${MOSAIC_CENTER_CACHE_PREFIX}${id}`);
+        if (cached) return cached;
+
+        // ② バックグラウンドで順に試す（各関数は内部でキャッシュ保存する）
+        try {
+            const probe = document.createElement('div');
+            await nftdrive(mosaicIdHex, probe);
+            const v = await nftCacheGet(`nftdrive_${id}`);
+            if (v) return v;
+        } catch { }
+        try {
+            const probe = document.createElement('div');
+            await comsaNFT(mosaicIdHex, probe);
+            const v = (await nftCacheGet(`comsa10_${id}`)) ?? (await nftCacheGet(`comsa11_${id}`));
+            if (v) return v;
+        } catch { }
+        try {
+            const probe = document.createElement('div');
+            await comsaNCFT(mosaicIdHex, probe);
+            const v = await nftCacheGet(`comsancft_${id}`);
+            if (v) return v;
+        } catch { }
+        try {
+            const probe = document.createElement('div');
+            await ukraineNFT(mosaicIdHex, probe);
+            const v = await nftCacheGet(`ukraine_${id}`);
+            if (v) return v;
+        } catch { }
+        // ③ Mosaic Center API
+        try {
+            const r = await fetch(`https://mosaic-center.net/db/api.php?mode=search&mosaicid=${mosaicIdHex}`);
+            if (r.ok) {
+                const data = await r.json();
+                if (data && data[0] && data[0][7]) {
+                    await nftCacheSet(`${MOSAIC_CENTER_CACHE_PREFIX}${id}`, data[0][7]);
+                    return data[0][7];
+                }
+            }
+        } catch { }
+        return null;
+    }
+
+    // ── カスタムドロップダウンを生成する汎用ビルダー ──────────────────────
+    //   隠し <select class="cssClass"> で値管理し、カスタムUIがそれを同期する
+    //   サムネイルはバックグラウンドで非同期取得してリストに順次反映する
+    //
+    // @returns { sel, wrapper } — sel: 隠し select, wrapper: カスタムUI要素
+    const buildCustomDropdown = (container, cssClass, list) => {
+        if (!container) return { sel: null, wrapper: null };
+        // 既存要素をリセット
+        container.innerHTML = '';
+
+        // ── 隠し <select>（値管理・既存コードとの互換用） ──
         const sel = document.createElement('select');
-        sel.classList.add(cssClass);
-        if (list.length === 0) {
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.textContent = '--- 対象なし ---';
-            sel.appendChild(opt);
-        }
+        sel.classList.add(cssClass, 'cmd-hidden-select');
         for (const m of list) {
             const opt = document.createElement('option');
             opt.value = m.id;
             opt.textContent = m.name;
             sel.appendChild(opt);
         }
+        if (list.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = '--- 対象なし ---';
+            sel.appendChild(opt);
+        }
         container.appendChild(sel);
-        return sel;
+
+        if (list.length === 0) return { sel, wrapper: null };
+
+        // ── カスタムUI ──
+        const wrapper = document.createElement('div');
+        wrapper.className = 'cmd-wrapper';
+
+        // トリガー（現在選択項目の表示）
+        const trigger = document.createElement('div');
+        trigger.className = 'cmd-trigger';
+        trigger.innerHTML = `
+            <img class="cmd-trigger-thumb" />
+            <span class="cmd-trigger-text">${list[0]?.name ?? ''}</span>
+            <span class="cmd-arrow">▾</span>`;
+        wrapper.appendChild(trigger);
+
+        const triggerThumb = trigger.querySelector('.cmd-trigger-thumb');
+        const triggerText  = trigger.querySelector('.cmd-trigger-text');
+
+        // ドロップダウンリスト
+        const listEl = document.createElement('div');
+        listEl.className = 'cmd-list';
+
+        // 各項目
+        const itemEls = list.map((m, idx) => {
+            const item = document.createElement('div');
+            item.className = 'cmd-item' + (idx === 0 ? ' selected' : '');
+            item.dataset.value = m.id;
+
+            const placeholder = document.createElement('div');
+            placeholder.className = 'cmd-item-placeholder';
+            placeholder.textContent = '🪙';
+
+            const thumb = document.createElement('img');
+            thumb.className = 'cmd-item-thumb';
+
+            const text = document.createElement('span');
+            text.className = 'cmd-item-text';
+            text.textContent = m.name;
+
+            item.appendChild(placeholder);
+            item.appendChild(thumb);
+            item.appendChild(text);
+            listEl.appendChild(item);
+            return { item, placeholder, thumb };
+        });
+
+        wrapper.appendChild(listEl);
+        container.appendChild(wrapper);
+
+        // ── 開閉トグル ──
+        let isOpen = false;
+        const openList = () => {
+            isOpen = true;
+            trigger.classList.add('open');
+            listEl.classList.add('open');
+        };
+        const closeList = () => {
+            isOpen = false;
+            trigger.classList.remove('open');
+            listEl.classList.remove('open');
+        };
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isOpen ? closeList() : openList();
+        });
+        document.addEventListener('click', closeList);
+
+        // ── トリガーのサムネイル更新ヘルパー ──
+        const setTriggerThumb = (url) => {
+            if (url) {
+                triggerThumb.src = url;
+                triggerThumb.style.display = 'block';
+            } else {
+                triggerThumb.style.display = 'none';
+            }
+        };
+
+        // ── 項目選択時の処理 ──
+        const selectItem = (value, url) => {
+            const idx = list.findIndex(m => m.id === value);
+            itemEls.forEach(({ item }, i) => {
+                item.classList.toggle('selected', i === idx);
+            });
+            triggerText.textContent = list[idx]?.name ?? value;
+            setTriggerThumb(url ?? null);
+            sel.value = value;
+            // change イベントを発火して既存の handleChange に繋ぐ
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            closeList();
+        };
+
+        itemEls.forEach(({ item, placeholder, thumb }, idx) => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const url = thumb.classList.contains('loaded') ? thumb.src : null;
+                selectItem(list[idx].id, url);
+            });
+        });
+
+        // ── サムネイルをバックグラウンドで非同期取得 ──
+        const thumbCache = new Map(); // id → url
+        (async () => {
+            for (let i = 0; i < list.length; i++) {
+                const m = list[i];
+                try {
+                    const url = await getMosaicThumbUrl(m.id);
+                    if (url) {
+                        thumbCache.set(m.id, url);
+                        // リスト項目にサムネイル反映
+                        const { placeholder, thumb } = itemEls[i];
+                        thumb.src = url;
+                        thumb.onload = () => {
+                            thumb.classList.add('loaded');
+                            placeholder.style.display = 'none';
+                        };
+                        // 現在選択中ならトリガーも更新
+                        if (sel.value.toUpperCase() === m.id.toUpperCase()) {
+                            setTriggerThumb(url);
+                        }
+                    }
+                } catch { }
+                // 並行リクエスト過多を防ぐため少し待つ
+                await new Promise(r => setTimeout(r, 50));
+            }
+        })();
+
+        // 外部から値・サムネイルを同期するメソッドを wrapper に追加
+        wrapper._syncValue = (value) => {
+            const idx = list.findIndex(m => m.id.toUpperCase() === value.toUpperCase());
+            if (idx < 0) return;
+            itemEls.forEach(({ item }, i) => item.classList.toggle('selected', i === idx));
+            triggerText.textContent = list[idx].name;
+            setTriggerThumb(thumbCache.get(list[idx].id) ?? null);
+        };
+
+        return { sel, wrapper };
     };
 
-    const sel1 = buildSelect(document.querySelector('.form-mosaic_ID'), 'select_m1', selectMosaics);
-    const sel2 = buildSelect(document.querySelector('.mosaic_ID2'), 'select_m1', selectMosaics);
+    const { sel: sel1, wrapper: wr1 } = buildCustomDropdown(
+        document.querySelector('.form-mosaic_ID'), 'select_m1', selectMosaics
+    );
+    const { sel: sel2, wrapper: wr2 } = buildCustomDropdown(
+        document.querySelector('.mosaic_ID2'), 'select_m1', selectMosaics
+    );
+
+    // 同期ヘルパー：どちらかが変更されたらもう一方も合わせる
+    const handleThumbChange = (value) => {
+        if (wr1) wr1._syncValue(value);
+        if (wr2) wr2._syncValue(value);
+    };
 
     // ── 供給量変更・回収ダイアログ用：発行したモザイクを ownerAddress で取得 ──
+
     // accountData.mosaics は「保有」モザイクなので発行済みでも配布済みのものが漏れる。
     // /mosaics?ownerAddress= は「自分が作成した」モザイクの一覧なので正確。
     // このエンドポイントはレスポンスに flags を含むので getMosaicInfo 不要。
@@ -590,7 +801,27 @@ async function initAccountDisplay(accountData) {
     console.log('[initAccountDisplay] supplyMutable:', supplyMutableMosaics.map(m => m.name));
     console.log('[initAccountDisplay] revokable:', revokableMosaics.map(m => m.name));
 
-    // 供給量変更ダイアログ用セレクト（supplyMutable のみ）
+    // 供給量変更・回収ダイアログ用セレクト（通常の <select> を使用）
+    const buildSelect = (container, cssClass, list) => {
+        if (!container) return null;
+        container.querySelectorAll('select').forEach(s => s.remove());
+        const sel = document.createElement('select');
+        sel.classList.add(cssClass);
+        if (list.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = '--- 対象なし ---';
+            sel.appendChild(opt);
+        }
+        for (const m of list) {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = m.name;
+            sel.appendChild(opt);
+        }
+        container.appendChild(sel);
+        return sel;
+    };
     const selSup = buildSelect(document.querySelector('.select_mosaic_sup'), 'select_sup', supplyMutableMosaics);
     // 回収ダイアログ用セレクト（revokable のみ）
     const selRev = buildSelect(document.querySelector('.revoke_select'), 'select_r', revokableMosaics);
@@ -639,6 +870,7 @@ async function initAccountDisplay(accountData) {
         // 全てのselect_m1を同期
         document.querySelectorAll('.select_m1').forEach(s => { s.value = val; });
         await updateHoyu(val);
+        handleThumbChange(val); // サムネイル更新（非同期・ノンブロッキング）
     };
     if (sel1) sel1.addEventListener('change', handleChange);
     if (sel2) sel2.addEventListener('change', handleChange);
@@ -1576,7 +1808,7 @@ async function initAccountAndUI() {
 
 async function handleSSS(activeAddress) {
     // フォーム値を取得
-    const toAddress = (document.getElementById('form-addr')?.value ?? '').trim();
+    const toAddress = (document.getElementById('form-addr')?.value ?? '').replace(/-/g, '').replace(/[\s\u3000]/g, '');
     const mosaicIdHex = document.querySelector('.select_m1')?.value ?? '';
     const amountRaw = document.getElementById('form-amount')?.value ?? '';
     const message = document.getElementById('form-message')?.value ?? '';
@@ -1852,7 +2084,7 @@ async function revoke_mosaic(activeAddress) {
     try {
         if (!isAggCheck) {
             // ─ 単体回収 ─
-            const holderAddress = (document.getElementById('holderAddress')?.value ?? '').trim();
+            const holderAddress = (document.getElementById('holderAddress')?.value ?? '').replace(/-/g, '').replace(/[\s\u3000]/g, '');
             if (!holderAddress) {
                 Swal.fire({ title: '回収元アドレスを入力してください。', icon: 'warning' }); return;
             }
