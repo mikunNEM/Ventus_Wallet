@@ -1687,6 +1687,59 @@
     })();
 
   </script>
+
+  <!-- NFTDrive ローディングオーバーレイ（about:blank 対策） -->
+  <style>
+    #_nftdrive_overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,0.55);
+      display: none; align-items: center; justify-content: center;
+      flex-direction: column; gap: 18px; cursor: pointer;
+    }
+    #_nftdrive_overlay.active { display: flex; }
+    @keyframes _nftdrive_spin { to { transform: rotate(360deg); } }
+    #_nftdrive_overlay .spinner {
+      width: 52px; height: 52px;
+      border: 5px solid rgba(255,255,255,0.25);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: _nftdrive_spin 0.75s linear infinite;
+    }
+    #_nftdrive_overlay .label { color: #fff; font-size: 14px; letter-spacing: .5px; }
+    #_nftdrive_overlay .hint  { color: rgba(255,255,255,0.5); font-size: 11px; }
+  </style>
+  <div id="_nftdrive_overlay">
+    <div class="spinner"></div>
+    <div class="label">NFTDrive を読み込んでいます…</div>
+    <div class="hint">タップで閉じる</div>
+  </div>
+  <script>
+    (function() {
+      const overlay = document.getElementById('_nftdrive_overlay');
+      overlay.addEventListener('click', () => overlay.classList.remove('active'));
+      document.addEventListener('click', (e) => {
+        const a = e.target.closest('a[href*="nftdrive-ex.net/download.php"]');
+        if (!a) return;
+        e.preventDefault();
+        const url = a.href;
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>NFTDrive</title>
+<style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;
+height:100vh;flex-direction:column;gap:20px;font-family:sans-serif;color:#fff;}
+.s{width:52px;height:52px;border:5px solid rgba(255,255,255,0.2);
+border-top-color:#fff;border-radius:50%;animation:sp 0.75s linear infinite;}
+@keyframes sp{to{transform:rotate(360deg);}}</style></head><body>
+<div class="s"></div><div>NFTDrive を読み込んでいます…</div>
+<script>window.location.href=${JSON.stringify(url)};<\/script>
+</body></html>`);
+          win.document.close();
+        } else {
+          window.open(url, '_blank');
+        }
+      });
+    })();
+  </script>
 </body>
 
 </html>
