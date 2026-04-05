@@ -127,12 +127,9 @@ function Onclick_Copy(copyText) {
 
 // v2 の Onclick_Decryption と同等（setEncryptedMessage + requestSignDecription）
 async function Onclick_Decryption(senderPubKey, encryptedHex) {
-    console.log('[Onclick_Decryption] senderPubKey:', senderPubKey);
-    console.log('[Onclick_Decryption] encryptedHex:', encryptedHex);
     try {
         window.SSS.setEncryptedMessage(encryptedHex, senderPubKey);
         const decrypted = await window.SSS.requestSignDecription();
-        console.log('[Onclick_Decryption] decrypted:', decrypted);
         Swal.fire({
             html: `復号化メッセージ<br>< Decrypted Message ><br><br>
                    <p style="font-size: 24px;"><font color="blue">${decrypted}</font></p>`
@@ -1171,6 +1168,12 @@ function _decodeMsgPayload(msgPayload) {
             }
         }
     }
+    // [ENC] workaround 検出: "[ENC]<hexPayload>" 形式の平文は暗号化メッセージとして扱う
+    if (msgType === 0 && text.startsWith('[ENC]')) {
+        msgType = 1;
+        msgHex = text.slice(5);  // "[ENC]" の後の hex
+        text = '';
+    }
     return { msgType, msgHex, text };
 }
 
@@ -1873,18 +1876,21 @@ async function handleSSS(activeAddress) {
             const div = mo.divisibility;
             amount = BigInt(Math.round(Number(amountRaw) * Math.pow(10, div)));
 
-            // encMsg の戻り値を正規化して 0x01 + 暗号バイト の Uint8Array にする
-            console.log('[handleSSS] encMsg type:', typeof encMsg, encMsg);
+            // [ENC] workaround: SSS Extension は type=0x01 転送を SIGN できないため、
+            // 暗号化ペイロードを "[ENC]<hexPayload>" 形式の平文メッセージとして送信する
+            let rawHex = '';
             if (encMsg instanceof Uint8Array) {
-                msgData = (encMsg[0] === 0x01) ? encMsg : new Uint8Array([0x01, ...encMsg]);
+                const bytes = (encMsg[0] === 0x01) ? encMsg.slice(1) : encMsg;
+                rawHex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
             } else if (typeof encMsg === 'string' && encMsg.length > 0) {
-                const hexBytes = encMsg.replace(/^0x/i, '').match(/.{1,2}/g).map(b => parseInt(b, 16));
-                msgData = (hexBytes[0] === 0x01) ? new Uint8Array(hexBytes) : new Uint8Array([0x01, ...hexBytes]);
+                rawHex = encMsg.replace(/^0x/i, '').toUpperCase();
             } else if (encMsg && typeof encMsg === 'object' && encMsg.payload) {
-                const hexBytes = encMsg.payload.replace(/^0x/i, '').match(/.{1,2}/g).map(b => parseInt(b, 16));
-                msgData = (hexBytes[0] === 0x01) ? new Uint8Array(hexBytes) : new Uint8Array([0x01, ...hexBytes]);
+                rawHex = encMsg.payload.replace(/^0x/i, '').toUpperCase();
             } else {
                 console.warn('[handleSSS] 暗号化メッセージの形式が不明。平文で送信します。', encMsg);
+            }
+            if (rawHex) {
+                msgData = '[ENC]' + rawHex;  // string → buildTransferTx が 0x00 プレフィックスを付与
             }
 
             // SSS 1つ目のダイアログが閉じてから 2つ目を開くまでの待機（race condition 防止）
