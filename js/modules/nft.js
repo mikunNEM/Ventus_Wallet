@@ -44,7 +44,7 @@ function openNFTDB() {
     });
 }
 
-async function nftCacheGet(key) {
+export async function nftCacheGet(key) {
     try {
         const db = await openNFTDB();
         return new Promise(resolve => {
@@ -56,7 +56,7 @@ async function nftCacheGet(key) {
     } catch { return null; }
 }
 
-async function nftCacheSet(key, dataUrl) {
+export async function nftCacheSet(key, dataUrl) {
     try {
         const db = await openNFTDB();
         db.transaction(NFT_DB_STORE, 'readwrite')
@@ -276,7 +276,7 @@ function renderMedia(dataStr, mosaicIdHex, dom) {
 
 // NG リスト（NFTDriveブラックリスト）
 let nftDriveNgList = [];
-fetch('https://nftdrive-explorer.info/black_list/')
+fetch('https://nftdrive.net/black_list/')
     .then(res => res.text())
     .then(text => { nftDriveNgList = JSON.parse(text); })
     .catch(() => { });
@@ -294,7 +294,7 @@ export async function nftdrive(mosaicIdHex, dom) {
         // ── キャッシュチェック ──────────────────────────────────────────────────
         const cached = await nftCacheGet(`nftdrive_${mosaicIdHex}`);
         if (cached) {
-            dom.innerHTML = `<br><div style="text-align: center"><a class="btn-style-link_2" href="https://nftdrive-explorer.info/chart.html?net=main&mosaic=${mosaicIdHex}" target="_blank">NFTDrive</a></div><br>`;
+            dom.innerHTML = `<br><div style="text-align: center"><a class="btn-style-link_2" href="https://nftdrive-ex.net/download.php?id=${mosaicIdHex}" target="_blank">NFTDrive</a></div><br>`;
             renderMedia(cached, mosaicIdHex, dom);
             return;
         }
@@ -372,7 +372,7 @@ export async function nftdrive(mosaicIdHex, dom) {
         if (!nftData) return;
 
         await nftCacheSet(`nftdrive_${mosaicIdHex}`, nftData);
-        dom.innerHTML = `<br><div style="text-align: center"><a class="btn-style-link_2" href="https://nftdrive-explorer.info/chart.html?net=main&mosaic=${mosaicIdHex}" target="_blank">NFTDrive</a></div><br>`;
+        dom.innerHTML = `<br><div style="text-align: center"><a class="btn-style-link_2" href="https://nftdrive-ex.net/download.php?id=${mosaicIdHex}" target="_blank">NFTDrive</a></div><br>`;
         renderMedia(nftData, mosaicIdHex, dom);
 
     } catch (e) {

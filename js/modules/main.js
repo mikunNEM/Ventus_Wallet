@@ -481,7 +481,7 @@ async function initAccountDisplay(accountData) {
 
     // NFTDriveエクスプローラー
     setHTML('nftdrive_explorer',
-        `<a href="https://nftdrive-explorer.info/?address=${addr}" target="_blank" rel="noopener noreferrer"> NFT-Drive Explorer </a>`);
+        `<a href="https://nftdrive-ex.net/" target="_blank" rel="noopener noreferrer"> NFT-Drive Explorer </a>`);
 
     // XYM残高表示
     const xymMosaic = accountData.mosaics?.find(m => m.id.toUpperCase() === XYM_ID.toUpperCase());
@@ -1184,16 +1184,22 @@ async function showTransactions(activeAddress, pageNumber) {
         pageSize: 15,
         pageNumber,
         order: 'desc',
+        embedded: 'false',
     });
 
     const res = await fetchJson(new URL(`/transactions/confirmed?${params}`, NODE));
     if (!res || !res.data) return;
 
+    const seenHashes = new Set();
+    const seenSelfTransfers = new Set(); // COMSA等: 自己送信の同一モザイク重複排除
     for (const item of res.data) {
         const tx   = item.transaction;
         const meta = item.meta;
         const txType = tx.type;
         const hash   = meta?.hash ?? tx.hash ?? '';
+
+        if (hash && seenHashes.has(hash)) continue;
+        if (hash) seenHashes.add(hash);
 
         // 日時
         const tsMs  = Number(meta?.timestamp ?? 0);
@@ -1205,6 +1211,17 @@ async function showTransactions(activeAddress, pageNumber) {
         const _signerRaw = tx.signerAddress ?? tx.signerPublicKey ?? '';
         const signerAddr = (_signerRaw.length === 64) ? publicKeyToAddress(_signerRaw) : hexToAddress(_signerRaw);
         const isSender   = signerAddr === activeAddress;
+
+        // COMSA等: FROM=TO の自己送信で同一モザイクIDは1件のみ表示
+        if (txType === 16724) {
+            const recipientAddr = hexToAddress(tx.recipientAddress ?? '');
+            if (signerAddr && signerAddr === recipientAddr) {
+                const mosaicKey = (tx.mosaics ?? []).map(m => m.id).sort().join(',');
+                const contentKey = `${signerAddr}|${mosaicKey}`;
+                if (seenSelfTransfers.has(contentKey)) continue;
+                seenSelfTransfers.add(contentKey);
+            }
+        }
 
         // ── カード ────────────────────────────────────────────
         const card = document.createElement('div');
@@ -1615,11 +1632,8 @@ async function main() {
     setHTML('finalized_chain_height',
         `[ <a target="_blank" href="${EXPLORER}/blocks/${chain.latestFinalizedBlock.height}">${chain.latestFinalizedBlock.height}</a> ]　日時: ${dispTimeStamp(Number(finalizedBlock.timestamp), epochAdjustment)}`);
 
-    // Tx History 表示
+    // Tx History 表示（ページ変更は index.html の onchange="select_Page()" で処理）
     await showTransactions(activeAddress, 1);
-    document.getElementById('page_num1')?.addEventListener('change', (e) => {
-        showTransactions(activeAddress, Number(e.target.value));
-    });
 
     // ハーベスト表示
     loadHarvestStatus(activeAddress);   // 委任ノード・ステータス表示（非同期・並行）

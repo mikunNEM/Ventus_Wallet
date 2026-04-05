@@ -1009,7 +1009,7 @@
     // ─── NGリスト（NFTDrive ブラックリスト）─────────────────────────────────────
 
     let nglist = [];
-    fetch('https://nftdrive-explorer.info/black_list/')
+    fetch('https://nftdrive.net/black_list/')
       .then(res => res.text())
       .then(text => { nglist = JSON.parse(text); })
       .catch(() => { });
@@ -1259,7 +1259,7 @@
         // ── キャッシュチェック ──────────────────────────────────────────────────
         const cached = await nftCacheGet(`nftdrive_${mosaicIdHex}`);
         if (cached) {
-          dom.innerHTML = `<br><div style="text-align: center"><a class="btn-style-link_2" href="https://nftdrive-explorer.info/chart.html?net=main&mosaic=${mosaicIdHex}" target="_blank">NFTDrive</a></div><br>`;
+          dom.innerHTML = `<br><div style="text-align: center"><a class="btn-style-link_2" href="https://nftdrive-ex.net/download.php?id=${mosaicIdHex}" target="_blank">NFTDrive</a></div><br>`;
           renderMedia(cached, mosaicIdHex, dom);
           return;
         }
@@ -1338,7 +1338,7 @@
         console.count('NFTDrive =====');
         const nftdriveUrl = nftData;
         await nftCacheSet(`nftdrive_${mosaicIdHex}`, nftdriveUrl);
-        dom.innerHTML = `<br><div style="text-align: center"><a class="btn-style-link_2" href="https://nftdrive-explorer.info/chart.html?net=main&mosaic=${mosaicIdHex}" target="_blank">NFTDrive</a></div><br>`;
+        dom.innerHTML = `<br><div style="text-align: center"><a class="btn-style-link_2" href="https://nftdrive-ex.net/download.php?id=${mosaicIdHex}" target="_blank">NFTDrive</a></div><br>`;
         renderMedia(nftdriveUrl, mosaicIdHex, dom);
 
       } catch (e) {
