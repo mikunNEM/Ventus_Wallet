@@ -3073,52 +3073,102 @@ export async function handleSSS_harvest(activeAddress) {
 
 /**
  * ハーベスト設定モーダルの「対象アカウント」セレクトを初期化する。
- * 自分のアカウント + 1-of-1 マルチシグアカウントを列挙する。
- * @param {string} activeAddress - SSS のアクティブアドレス
+ * - SSS のアクティブアドレスを常に最新から取得する（ポップアップ開時に再実行されるため）
+ * - SSS 自身が 1-of-N マルチシグ本体の場合は警告を表示する
+ * - 連署者の場合は、配下の minApproval=1 のマルチシグアカウントを候補に追加する
+ * @param {string} [_activeAddress] - 省略時は window.SSS.activeAddress を使用
  */
-export async function loadHarvestMsigSelect(activeAddress) {
+export async function loadHarvestMsigSelect(_activeAddress) {
     const container = document.getElementById('harvest_target_select_area');
     if (!container) return;
 
+    // SSS のアクティブアドレスを常に最新から取得
+    const activeAddress = _activeAddress ?? window.SSS?.activeAddress;
+    if (!activeAddress) {
+        container.innerHTML = '<span style="color:#e53e3e;font-size:12px;">⚠️ SSS 未接続</span>';
+        return;
+    }
+
     container.innerHTML = '<span style="color:#aaa;font-size:12px;">読み込み中...</span>';
 
-    // 自分のアカウントは常に候補
-    const candidates = [{ addr: activeAddress, label: `自分のアカウント（${activeAddress.slice(0, 8)}...）`, minApproval: 0 }];
-
-    // 連署しているマルチシグアカウントを取得
+    // ── SSS 自身がマルチシグアカウントかどうかを確認 ─────────────────────
+    // マルチシグ本体は自分で署名できないため、連署者アカウントで接続が必要
     try {
-        const res = await fetch(new URL('/account/' + activeAddress + '/multisig', NODE));
-        const json = await res.json();
-        const msigAddrs = (json.multisig?.multisigAddresses ?? []).map(
+        const selfRes = await fetch(new URL('/account/' + activeAddress + '/multisig', NODE));
+        const selfJson = await selfRes.json();
+        const selfInfo = selfJson.multisig;
+        const isSelfMsig = (selfInfo?.cosignatoryAddresses?.length ?? 0) > 0;
+
+        if (isSelfMsig) {
+            // SSS 自身がマルチシグ本体 → 連署者アカウントで接続するよう案内
+            container.innerHTML =
+                '<span style="color:#d97706;font-size:12px;">' +
+                '⚠️ この SSS アカウントはマルチシグ本体です。<br>' +
+                'ハーベスト設定は <b>連署者アカウント</b> で SSS 接続して行ってください。' +
+                '</span>';
+            return;
+        }
+
+        // ── 連署者として管理しているマルチシグアカウントを取得 ──────────────
+        const candidates = [
+            { addr: activeAddress, label: `自分のアカウント（${activeAddress.slice(0, 8)}...）`, minApproval: 0 }
+        ];
+
+        const msigAddrsRaw = selfInfo?.multisigAddresses ?? [];
+        console.log('[loadHarvestMsigSelect] multisigAddresses raw:', JSON.stringify(msigAddrsRaw));
+
+        const msigAddrs = msigAddrsRaw.map(
             a => (typeof a === 'string' && a.length === 48) ? hexToAddress(a) : a
         );
+        console.log('[loadHarvestMsigSelect] multisigAddresses converted:', JSON.stringify(msigAddrs));
+
         for (const addr of msigAddrs) {
             try {
                 const mRes = await fetch(new URL('/account/' + addr + '/multisig', NODE));
                 const mJson = await mRes.json();
                 const minApproval = mJson.multisig?.minApproval ?? 99;
+                console.log(`[loadHarvestMsigSelect] ${addr} minApproval:`, minApproval);
                 if (minApproval <= 1) {
-                    candidates.push({ addr, label: `🏦 マルチシグ 1-of-N（${addr.slice(0, 8)}...）`, minApproval });
+                    const numCosig = mJson.multisig?.cosignatoryAddresses?.length ?? 1;
+                    candidates.push({
+                        addr,
+                        label: `🏦 マルチシグ 1-of-${numCosig}（${addr.slice(0, 8)}...）`,
+                        minApproval,
+                    });
                 }
-            } catch { /* 取得失敗は無視 */ }
+            } catch (e) {
+                console.warn('[loadHarvestMsigSelect] inner fetch failed for', addr, e.message);
+            }
         }
-    } catch (e) {
-        console.warn('[loadHarvestMsigSelect] multisig fetch failed:', e.message);
-    }
 
-    // セレクトボックスを生成
-    const sel = document.createElement('select');
-    sel.id = 'harvest_target_select';
-    sel.style.cssText = 'width:100%;padding:6px 10px;border-radius:8px;border:1.5px solid #a78bfa;font-size:13px;background:#fff;margin-top:4px;';
-    for (const c of candidates) {
+        // セレクトボックスを生成
+        const sel = document.createElement('select');
+        sel.id = 'harvest_target_select';
+        sel.style.cssText = 'width:100%;padding:6px 10px;border-radius:8px;border:1.5px solid #a78bfa;font-size:13px;background:#fff;margin-top:4px;';
+        for (const c of candidates) {
+            const opt = document.createElement('option');
+            opt.value = c.addr;
+            opt.dataset.minApproval = c.minApproval;
+            opt.textContent = c.label;
+            sel.appendChild(opt);
+        }
+        container.innerHTML = '';
+        container.appendChild(sel);
+        console.log('[loadHarvestMsigSelect] candidates:', candidates.map(c => c.label));
+
+    } catch (e) {
+        console.warn('[loadHarvestMsigSelect] fetch failed:', e.message);
+        // フォールバック: 自分のアカウントだけ表示
+        const sel = document.createElement('select');
+        sel.id = 'harvest_target_select';
+        sel.style.cssText = 'width:100%;padding:6px 10px;border-radius:8px;border:1.5px solid #a78bfa;font-size:13px;background:#fff;margin-top:4px;';
         const opt = document.createElement('option');
-        opt.value = c.addr;
-        opt.dataset.minApproval = c.minApproval;
-        opt.textContent = c.label;
+        opt.value = activeAddress;
+        opt.textContent = `自分のアカウント（${activeAddress.slice(0, 8)}...）`;
         sel.appendChild(opt);
+        container.innerHTML = '';
+        container.appendChild(sel);
     }
-    container.innerHTML = '';
-    container.appendChild(sel);
 }
 
 /**

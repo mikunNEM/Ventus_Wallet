@@ -1503,13 +1503,22 @@
       var closeBtn = document.getElementById('js-close-btn_aInfo');
       var showBtn = document.getElementById('js-show-popup_aInfo');
 
-      closePopUp(blackBg);
-      closePopUp(closeBtn);
-      closePopUp(showBtn);
-      function closePopUp(elem) {
+      // 閉じるボタン・背景クリックは閉じるだけ
+      [blackBg, closeBtn].forEach(function(elem) {
         if (!elem) return;
         elem.addEventListener('click', function () {
+          popup_aInfo.classList.remove('is-show');
+        });
+      });
+
+      // 開くボタン: ポップアップを開くときに対象アカウントセレクトを再初期化
+      if (showBtn) {
+        showBtn.addEventListener('click', function () {
+          var isOpening = !popup_aInfo.classList.contains('is-show');
           popup_aInfo.classList.toggle('is-show');
+          if (isOpening && typeof window.loadHarvestMsigSelect === 'function') {
+            window.loadHarvestMsigSelect();
+          }
         });
       }
     }
