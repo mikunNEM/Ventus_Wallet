@@ -119,8 +119,13 @@
 
     /* アニメーション軽減設定のユーザーには静止表示 */
     @media (prefers-reduced-motion: reduce) {
-      body::before { animation: none; }
-      .mv-title { animation: none; }
+      body::before {
+        animation: none;
+      }
+
+      .mv-title {
+        animation: none;
+      }
     }
 
     /* ── テーマトグルボタン（右上固定） ── */
@@ -278,7 +283,8 @@
     }
 
     #addr-history-wrap.is-open #addr-history-body {
-      max-height: 240px; /* リスト最大高さより大きい値 */
+      max-height: 240px;
+      /* リスト最大高さより大きい値 */
     }
 
 
@@ -428,6 +434,7 @@
       font-size: 15px;
       line-height: 1;
     }
+
     /* CSSで描画する2×2グリッドアイコン */
     .icon-grid {
       display: inline-block;
@@ -436,6 +443,7 @@
       position: relative;
       flex-shrink: 0;
     }
+
     .icon-grid::before,
     .icon-grid::after {
       content: '';
@@ -445,12 +453,16 @@
       background: currentColor;
       border-radius: 1px;
     }
+
     .icon-grid::before {
-      top: 0; left: 0;
+      top: 0;
+      left: 0;
       box-shadow: 9px 0 0 currentColor;
     }
+
     .icon-grid::after {
-      bottom: 0; left: 0;
+      bottom: 0;
+      left: 0;
       box-shadow: 9px 0 0 currentColor;
     }
 
@@ -584,10 +596,12 @@
 
     <!-- 表示切り替えボタン -->
     <div id="view-toggle" style="display:none;">
-      <div id="btn-list" class="view-toggle-btn view-btn-active" onclick="switchView('list')" role="button" tabindex="0" title="リスト表示">
+      <div id="btn-list" class="view-toggle-btn view-btn-active" onclick="switchView('list')" role="button" tabindex="0"
+        title="リスト表示">
         <span class="toggle-icon">≡</span> リスト
       </div>
-      <div id="btn-grid" class="view-toggle-btn view-btn-inactive" onclick="switchView('grid')" role="button" tabindex="0" title="グリッド表示">
+      <div id="btn-grid" class="view-toggle-btn view-btn-inactive" onclick="switchView('grid')" role="button"
+        tabindex="0" title="グリッド表示">
         <span class="icon-grid"></span> グリッド
       </div>
     </div>
@@ -604,7 +618,7 @@
   <script type="module">
 
     // ─── SDK v3 設定 ────────────────────────────────────────────────────────────
-    const SDK_VERSION = '3.3.0';
+    const SDK_VERSION = '3.3.1';
 
     // ─── グローバル状態 ──────────────────────────────────────────────────────────
     // NODE は getAvailableNode() で初期化される（main.js と同じ手法）
@@ -1691,22 +1705,47 @@
   <!-- NFTDrive ローディングオーバーレイ（about:blank 対策） -->
   <style>
     #_nftdrive_overlay {
-      position: fixed; inset: 0; z-index: 9999;
-      background: rgba(0,0,0,0.55);
-      display: none; align-items: center; justify-content: center;
-      flex-direction: column; gap: 18px; cursor: pointer;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0, 0, 0, 0.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 18px;
+      cursor: pointer;
     }
-    #_nftdrive_overlay.active { display: flex; }
-    @keyframes _nftdrive_spin { to { transform: rotate(360deg); } }
+
+    #_nftdrive_overlay.active {
+      display: flex;
+    }
+
+    @keyframes _nftdrive_spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
     #_nftdrive_overlay .spinner {
-      width: 52px; height: 52px;
-      border: 5px solid rgba(255,255,255,0.25);
+      width: 52px;
+      height: 52px;
+      border: 5px solid rgba(255, 255, 255, 0.25);
       border-top-color: #fff;
       border-radius: 50%;
       animation: _nftdrive_spin 0.75s linear infinite;
     }
-    #_nftdrive_overlay .label { color: #fff; font-size: 14px; letter-spacing: .5px; }
-    #_nftdrive_overlay .hint  { color: rgba(255,255,255,0.5); font-size: 11px; }
+
+    #_nftdrive_overlay .label {
+      color: #fff;
+      font-size: 14px;
+      letter-spacing: .5px;
+    }
+
+    #_nftdrive_overlay .hint {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 11px;
+    }
   </style>
   <div id="_nftdrive_overlay">
     <div class="spinner"></div>
@@ -1714,7 +1753,7 @@
     <div class="hint">タップで閉じる</div>
   </div>
   <script>
-    (function() {
+    (function () {
       const overlay = document.getElementById('_nftdrive_overlay');
       overlay.addEventListener('click', () => overlay.classList.remove('active'));
       document.addEventListener('click', (e) => {

@@ -1639,7 +1639,8 @@ async function main() {
     await showTransactions(activeAddress, 1);
 
     // ハーベスト表示
-    loadHarvestStatus(activeAddress);   // 委任ノード・ステータス表示（非同期・並行）
+    loadHarvestStatus(activeAddress);        // 委任ノード・ステータス表示（非同期・並行）
+    loadHarvestMsigSelect(activeAddress);    // 対象アカウントセレクト初期化（非同期・並行）
     // ハーベスト履歴ページ番号をリセット（ポップアップ初期表示）
     harvestPageNumber = 0;
     // テーブルをクリア（ポップアップ再表示時に重複しないよう）
@@ -1712,6 +1713,8 @@ async function main() {
     window.handleSSS_multisig = () => handleSSS_multisig(activeAddress);
     window.handleSSS_dona = () => handleSSS_dona(activeAddress);
     window.handleSSS_harvest = () => handleSSS_harvest(activeAddress);
+    window.handleSSS_harvest_msig = () => handleSSS_harvest_msig(activeAddress);
+    window.loadHarvestMsigSelect = () => loadHarvestMsigSelect(activeAddress);
 
     // 追加グローバル関数（v3移植・復元分）
     window.loadMsigPanelInfo  = () => loadMsigPanelInfo();
@@ -1778,6 +1781,7 @@ async function initAccountAndUI() {
     try {
         const accountData = await getAccountInfo(addr);
         await initAccountDisplay(accountData);
+        loadHarvestMsigSelect(addr);   // ハーベスト対象アカウントセレクト更新（非同期）
     } catch (e) { console.error('[initAccountAndUI]', e); }
 
     // グローバル関数として公開
@@ -1799,6 +1803,8 @@ async function initAccountAndUI() {
     window.handleSSS_multisig = () => handleSSS_multisig(addr);
     window.handleSSS_dona = () => handleSSS_dona(addr);
     window.handleSSS_harvest = () => handleSSS_harvest(addr);
+    window.handleSSS_harvest_msig = () => handleSSS_harvest_msig(addr);
+    window.loadHarvestMsigSelect = () => loadHarvestMsigSelect(addr);
     window.loadMsigPanelInfo = () => loadMsigPanelInfo();
     window.loadMsigTree = () => loadMsigTree();
     window.loadMsigSendModal = () => loadMsigSendModal();
@@ -3057,6 +3063,225 @@ export async function handleSSS_harvest(activeAddress) {
 
     } catch (e) {
         console.error('[handleSSS_harvest]', e);
+        Swal.fire({ title: '委任設定失敗', text: e.message, icon: 'error' });
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// マルチシグアカウント（1-of-1）のハーベスト委任設定
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ハーベスト設定モーダルの「対象アカウント」セレクトを初期化する。
+ * 自分のアカウント + 1-of-1 マルチシグアカウントを列挙する。
+ * @param {string} activeAddress - SSS のアクティブアドレス
+ */
+export async function loadHarvestMsigSelect(activeAddress) {
+    const container = document.getElementById('harvest_target_select_area');
+    if (!container) return;
+
+    container.innerHTML = '<span style="color:#aaa;font-size:12px;">読み込み中...</span>';
+
+    // 自分のアカウントは常に候補
+    const candidates = [{ addr: activeAddress, label: `自分のアカウント（${activeAddress.slice(0, 8)}...）`, minApproval: 0 }];
+
+    // 連署しているマルチシグアカウントを取得
+    try {
+        const res = await fetch(new URL('/account/' + activeAddress + '/multisig', NODE));
+        const json = await res.json();
+        const msigAddrs = (json.multisig?.multisigAddresses ?? []).map(
+            a => (typeof a === 'string' && a.length === 48) ? hexToAddress(a) : a
+        );
+        for (const addr of msigAddrs) {
+            try {
+                const mRes = await fetch(new URL('/account/' + addr + '/multisig', NODE));
+                const mJson = await mRes.json();
+                const minApproval = mJson.multisig?.minApproval ?? 99;
+                if (minApproval <= 1) {
+                    candidates.push({ addr, label: `🏦 マルチシグ 1-of-N（${addr.slice(0, 8)}...）`, minApproval });
+                }
+            } catch { /* 取得失敗は無視 */ }
+        }
+    } catch (e) {
+        console.warn('[loadHarvestMsigSelect] multisig fetch failed:', e.message);
+    }
+
+    // セレクトボックスを生成
+    const sel = document.createElement('select');
+    sel.id = 'harvest_target_select';
+    sel.style.cssText = 'width:100%;padding:6px 10px;border-radius:8px;border:1.5px solid #a78bfa;font-size:13px;background:#fff;margin-top:4px;';
+    for (const c of candidates) {
+        const opt = document.createElement('option');
+        opt.value = c.addr;
+        opt.dataset.minApproval = c.minApproval;
+        opt.textContent = c.label;
+        sel.appendChild(opt);
+    }
+    container.innerHTML = '';
+    container.appendChild(sel);
+}
+
+/**
+ * マルチシグアカウント（1-of-1）のハーベスト委任設定を送信する。
+ * 内部 TX の signer をマルチシグアカウントの pubKey に差し替え、
+ * AggregateComplete として SSS（連署者）が署名してアナウンスする。
+ * @param {string} activeAddress - SSS のアクティブアドレス（連署者）
+ */
+export async function handleSSS_harvest_msig(activeAddress) {
+    // ノード入力値を取得
+    const nodeHost = document.getElementById('node')?.value?.trim();
+    if (!nodeHost) {
+        Swal.fire({ title: 'ノードを入力してください', icon: 'warning' }); return;
+    }
+    const targetNode = nodeHost.startsWith('http') ? nodeHost : `https://${nodeHost}:3001`;
+
+    // 対象アカウントを取得
+    const sel = document.getElementById('harvest_target_select');
+    const harvestTargetAddr = sel?.value ?? activeAddress;
+    const isMsig = harvestTargetAddr !== activeAddress;
+
+    try {
+        // ── ① ノード情報取得 ──────────────────────────────────────────────
+        let nodeInfoJson;
+        try {
+            const r = await fetch(new URL('/node/info', targetNode));
+            nodeInfoJson = await r.json();
+        } catch (e) {
+            throw new Error(`ノード情報の取得に失敗しました: ${e.message}`);
+        }
+        const nodePubKeyHex = nodeInfoJson.nodePublicKey;
+        const nodeNetworkId = nodeInfoJson.networkIdentifier;
+        if (!nodePubKeyHex) throw new Error('ノードの公開鍵が取得できませんでした');
+        if (nodeNetworkId !== networkType) {
+            Swal.fire({ title: 'ネットワークタイプが異なります', text: '別のノードを選択してください', icon: 'error' });
+            return;
+        }
+
+        // ── ② 対象アカウント情報取得 ─────────────────────────────────────
+        const accountInfo = await getAccountInfo(harvestTargetAddr);
+        if (!accountInfo) throw new Error('アカウント情報が取得できませんでした');
+
+        // マルチシグの場合は minApproval を確認（1-of-N のみ許可）
+        if (isMsig) {
+            const msigRes = await fetch(new URL('/account/' + harvestTargetAddr + '/multisig', NODE));
+            const msigJson = await msigRes.json();
+            const minApproval = msigJson.multisig?.minApproval ?? 99;
+            if (minApproval > 1) {
+                Swal.fire({
+                    title: 'このマルチシグには対応していません',
+                    text: '1-of-N（最小承認数=1）のマルチシグアカウントのみ対応しています。',
+                    icon: 'warning',
+                });
+                return;
+            }
+        }
+
+        // インポータンスチェック（対象アカウント側で確認）
+        const importance = Number(accountInfo.importance ?? 0) / 78429286;
+        if (importance <= 0) {
+            Swal.fire({
+                title: 'インポータンスが無効です',
+                text: `${isMsig ? 'マルチシグアカウント' : 'アカウント'}に 10,000 XYM 以上を保有し、約12時間経つとインポータンスが有効になります。`,
+                icon: 'warning',
+            });
+            return;
+        }
+
+        // ── ③ inner TX の signer 公開鍵を決定 ──────────────────────────
+        // 通常: SSS activePublicKey / マルチシグ: マルチシグアカウントの pubKey
+        const outerSignerPubKey = window.SSS.activePublicKey;  // outer（AggregateComplete）signer
+        let innerSignerPubKeyHex = outerSignerPubKey;          // デフォルトは自分
+        if (isMsig) {
+            const acctRes = await fetch(new URL('/accounts/' + harvestTargetAddr, NODE));
+            const acctJson = await acctRes.json();
+            const fetchedKey = acctJson.account?.publicKey ?? '';
+            if (fetchedKey && !/^0+$/.test(fetchedKey)) {
+                innerSignerPubKeyHex = fetchedKey;
+            } else {
+                throw new Error('マルチシグアカウントの公開鍵が取得できませんでした');
+            }
+            console.log('[handleSSS_harvest_msig] msigPubKey:', innerSignerPubKeyHex);
+        }
+
+        const supplKeys = accountInfo.supplementalPublicKeys ?? {};
+        const innerTxs  = [];
+
+        // ── ④ リモートアカウント・VRF アカウントを新規生成 ───────────────
+        const remoteKeyPair = new sdkSymbol.KeyPair(sdkCore.PrivateKey.random());
+        const vrfKeyPair    = new sdkSymbol.KeyPair(sdkCore.PrivateKey.random());
+        const LINK   = 1;
+        const UNLINK = 0;
+
+        // ── ⑤ 既存キーを Unlink（委任先ノード変更時に必要）────────────────
+        if (supplKeys.linked?.publicKey) {
+            innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+                new sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
+                    new sdkCore.PublicKey(supplKeys.linked.publicKey), UNLINK
+                ), innerSignerPubKeyHex
+            ));
+        }
+        if (supplKeys.vrf?.publicKey) {
+            innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+                new sdkSymbol.descriptors.VrfKeyLinkTransactionV1Descriptor(
+                    new sdkCore.PublicKey(supplKeys.vrf.publicKey), UNLINK
+                ), innerSignerPubKeyHex
+            ));
+        }
+        if (supplKeys.node?.publicKey) {
+            innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+                new sdkSymbol.descriptors.NodeKeyLinkTransactionV1Descriptor(
+                    new sdkCore.PublicKey(supplKeys.node.publicKey), UNLINK
+                ), innerSignerPubKeyHex
+            ));
+        }
+
+        // ── ⑥ 新しいキーを Link ──────────────────────────────────────────
+        innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+            new sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
+                remoteKeyPair.publicKey, LINK
+            ), innerSignerPubKeyHex
+        ));
+        innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+            new sdkSymbol.descriptors.VrfKeyLinkTransactionV1Descriptor(
+                vrfKeyPair.publicKey, LINK
+            ), innerSignerPubKeyHex
+        ));
+        innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+            new sdkSymbol.descriptors.NodeKeyLinkTransactionV1Descriptor(
+                new sdkCore.PublicKey(nodePubKeyHex), LINK
+            ), innerSignerPubKeyHex
+        ));
+
+        // ── ⑦ PersistentDelegationRequest ──────────────────────────────
+        const msgEncoder    = new sdkSymbol.MessageEncoder(remoteKeyPair.privateKey);
+        const persistentMsg = msgEncoder.encodePersistentHarvestingDelegation(
+            new sdkCore.PublicKey(nodePubKeyHex),
+            remoteKeyPair,
+            vrfKeyPair
+        );
+        const nodeAddress = facade.network.publicKeyToAddress(new sdkCore.PublicKey(nodePubKeyHex));
+        innerTxs.push(facade.createEmbeddedTransactionFromTypedDescriptor(
+            new sdkSymbol.descriptors.TransferTransactionV1Descriptor(
+                nodeAddress.toString(), [], persistentMsg
+            ), innerSignerPubKeyHex
+        ));
+
+        // ── ⑧ AggregateComplete として署名・アナウンス ──────────────────
+        // cosigCount: マルチシグの場合は連署者（SSS active）が1名いるため 1、通常は 0
+        const cosigCount = isMsig ? 1 : 0;
+        const aggregateTx = buildAggregateCompleteTx(innerTxs, outerSignerPubKey, cosigCount, 100);
+        const feeXym = Number(aggregateTx.fee.value) / 1_000_000;
+        console.log(`[handleSSS_harvest_msig] txs: ${innerTxs.length}, cosigCount: ${cosigCount}, fee: ${feeXym} XYM, target: ${harvestTargetAddr}`);
+
+        await signAndAnnounce(aggregateTx);
+        Swal.fire({
+            title: '委任設定を送信しました！',
+            text: `${isMsig ? 'マルチシグアカウントの' : ''}ハーベスト開始まで少し時間がかかります。`,
+            icon: 'success'
+        });
+
+    } catch (e) {
+        console.error('[handleSSS_harvest_msig]', e);
         Swal.fire({ title: '委任設定失敗', text: e.message, icon: 'error' });
     }
 }

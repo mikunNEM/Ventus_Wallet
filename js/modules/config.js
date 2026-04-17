@@ -34,7 +34,7 @@ export const NETWORK_CONFIG = {
 };
 
 export const TOTAL_CHAIN_IMPORTANCE = 78429286;
-export const SDK_VERSION = '3.3.0';
+export const SDK_VERSION = '3.3.1';
 
 // ── 現在のアクティブ設定（initNetwork後に設定）────────────────────
 export let XYM_ID = null;
