@@ -1640,7 +1640,6 @@ async function main() {
 
     // ハーベスト表示
     loadHarvestStatus(activeAddress);        // 委任ノード・ステータス表示（非同期・並行）
-    loadHarvestMsigSelect(activeAddress);    // 対象アカウントセレクト初期化（非同期・並行）
     // ハーベスト履歴ページ番号をリセット（ポップアップ初期表示）
     harvestPageNumber = 0;
     // テーブルをクリア（ポップアップ再表示時に重複しないよう）
@@ -1713,8 +1712,6 @@ async function main() {
     window.handleSSS_multisig = () => handleSSS_multisig(activeAddress);
     window.handleSSS_dona = () => handleSSS_dona(activeAddress);
     window.handleSSS_harvest = () => handleSSS_harvest(activeAddress);
-    window.handleSSS_harvest_msig = () => handleSSS_harvest_msig(activeAddress);
-    window.loadHarvestMsigSelect = () => loadHarvestMsigSelect(activeAddress);
 
     // 追加グローバル関数（v3移植・復元分）
     window.loadMsigPanelInfo  = () => loadMsigPanelInfo();
@@ -1781,7 +1778,6 @@ async function initAccountAndUI() {
     try {
         const accountData = await getAccountInfo(addr);
         await initAccountDisplay(accountData);
-        loadHarvestMsigSelect(addr);   // ハーベスト対象アカウントセレクト更新（非同期）
     } catch (e) { console.error('[initAccountAndUI]', e); }
 
     // グローバル関数として公開
@@ -1803,8 +1799,6 @@ async function initAccountAndUI() {
     window.handleSSS_multisig = () => handleSSS_multisig(addr);
     window.handleSSS_dona = () => handleSSS_dona(addr);
     window.handleSSS_harvest = () => handleSSS_harvest(addr);
-    window.handleSSS_harvest_msig = () => handleSSS_harvest_msig(addr);
-    window.loadHarvestMsigSelect = () => loadHarvestMsigSelect(addr);
     window.loadMsigPanelInfo = () => loadMsigPanelInfo();
     window.loadMsigTree = () => loadMsigTree();
     window.loadMsigSendModal = () => loadMsigSendModal();

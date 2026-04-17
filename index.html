@@ -940,18 +940,12 @@
                   onclick="window.open('https://symbol-tools.com/symbolTools/view/tool/nodeList.html')">ノードリスト</button>
               </div>
               <div class="mb-3">
-                <!-- 対象アカウント選択 -->
-                <div style="margin-bottom:12px;">
-                  <label style="font-size:13px;color:#555;display:block;margin-bottom:4px;">🎯 対象アカウント</label>
-                  <div id="harvest_target_select_area" style="font-size:13px;color:#888;">ー</div>
-                  <div style="font-size:11px;color:#888;margin-top:4px;">※ 1-of-N マルチシグアカウントも選択できます</div>
-                </div>
                 <label for="node" class="form-label">委任するノードを入力してください</label>
                 <input type="text" class="form-control" id="node" placeholder="例）symbol-mikun.net　　　（HTTPSノードのみ）">
                 <br>
                 <div class="d-grid gap-2 col-6 mx-auto mt-3">
                   <div style="text-align: center;"><button class="btn btn-primary" id="txBtn" type="button"
-                      onclick="handleSSS_harvest_msig()">ハーベスト開始　/　ノード変更 </button></div>
+                      onclick="handleSSS_harvest()">ハーベスト開始　/　ノード変更 </button></div>
                 </div>
               </div>
             </div>
@@ -1503,22 +1497,13 @@
       var closeBtn = document.getElementById('js-close-btn_aInfo');
       var showBtn = document.getElementById('js-show-popup_aInfo');
 
-      // 閉じるボタン・背景クリックは閉じるだけ
-      [blackBg, closeBtn].forEach(function(elem) {
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      closePopUp(showBtn);
+      function closePopUp(elem) {
         if (!elem) return;
         elem.addEventListener('click', function () {
-          popup_aInfo.classList.remove('is-show');
-        });
-      });
-
-      // 開くボタン: ポップアップを開くときに対象アカウントセレクトを再初期化
-      if (showBtn) {
-        showBtn.addEventListener('click', function () {
-          var isOpening = !popup_aInfo.classList.contains('is-show');
           popup_aInfo.classList.toggle('is-show');
-          if (isOpening && typeof window.loadHarvestMsigSelect === 'function') {
-            window.loadHarvestMsigSelect();
-          }
         });
       }
     }
