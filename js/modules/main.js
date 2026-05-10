@@ -1621,14 +1621,20 @@ async function main() {
             if (dom_account_name) dom_account_name.innerHTML = `<font color="gray">SSS Extension が未インストールです</font>`;
             Swal.fire({
                 title: '⚡ SSS Extension が必要です',
+                width: '540px',
                 html: `
-                    <p style="text-align:left; margin-bottom:12px;">Ventus Wallet を使うには <strong>SSS Extension</strong> のインストールが必要です。</p>
-                    <ol style="text-align:left; line-height:2.2; padding-left:20px;">
+                    <p style="margin-bottom:14px;">Ventus Wallet を使うには <strong>SSS Extension</strong> のインストールが必要です。</p>
+                    <ol style="text-align:left; line-height:2.4; padding-left:24px; white-space:nowrap;">
                         <li>🔧 <a href="https://chrome.google.com/webstore/detail/sss-extension/lliohepcpicdffkfknizddecpmlnmkp" target="_blank" rel="noopener noreferrer" style="color:#e65100; font-weight:bold;">SSS Extension をインストール</a>（Chrome 拡張機能）</li>
                         <li>🔑 拡張機能を開いてアカウントを作成 または 秘密鍵をインポート</li>
-                        <li>🔗 拡張機能のアイコンをクリック → このページを「リンク」</li>
+                        <li>🖱️ ページ上で右クリック →「<strong>Link to SSS</strong>」を選択</li>
                     </ol>
-                    <p style="margin-top:12px;"><a href="https://docs.sss-symbol.com/ja/category/users-guide" target="_blank" rel="noopener noreferrer" style="font-size:13px; color:#888;">📖 SSS Extension 使い方ガイド →</a></p>
+                    <div style="margin-top:18px;">
+                        <a href="https://docs.sss-symbol.com/ja/category/users-guide" target="_blank" rel="noopener noreferrer"
+                           style="display:inline-block; padding:8px 20px; background:#1976d2; color:#fff; border-radius:8px; font-size:14px; font-weight:bold; text-decoration:none;">
+                            📖 SSS Extension 使い方ガイド
+                        </a>
+                    </div>
                 `,
                 icon: 'info',
                 confirmButtonText: 'わかりました',
