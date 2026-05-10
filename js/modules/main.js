@@ -1616,8 +1616,14 @@ async function main() {
     // 現時点で既にリンク済みならすぐにアカウント情報を取得
     const activeAddress = window.SSS?.activeAddress;
     if (!activeAddress) {
-        // 未リンク: UI に表示して待機（SSSWindow で initAccountAndUI が呼ばれる）
-        if (dom_account_name) dom_account_name.innerHTML = `<font color="gray">SSS未接続 - SSSをリンクしてください</font>`;
+        if (typeof window.SSS === 'undefined') {
+            // Extension 自体が未インストール → オンボーディング表示
+            document.getElementById('onboarding-banner').style.display = 'block';
+            if (dom_account_name) dom_account_name.innerHTML = `<font color="gray">SSS Extension が未インストールです</font>`;
+        } else {
+            // Extension はあるがアカウント未リンク → 既存メッセージ
+            if (dom_account_name) dom_account_name.innerHTML = `<font color="gray">SSS未接続 - SSSをリンクしてください</font>`;
+        }
         return;
     }
 
@@ -1766,6 +1772,8 @@ async function main() {
 async function initAccountAndUI() {
     const addr = window.SSS?.activeAddress;
     if (!addr) { console.warn('[initAccountAndUI] activeAddress が取得できません'); return; }
+
+    document.getElementById('onboarding-banner').style.display = 'none';
 
     // ネットワーク名表示を更新
     const dom_account_name = document.getElementById('account_name');
