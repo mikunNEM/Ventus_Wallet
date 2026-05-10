@@ -1617,9 +1617,24 @@ async function main() {
     const activeAddress = window.SSS?.activeAddress;
     if (!activeAddress) {
         if (typeof window.SSS === 'undefined') {
-            // Extension 自体が未インストール → オンボーディング表示
-            document.getElementById('onboarding-banner').style.display = 'block';
+            // Extension 自体が未インストール → オンボーディングモーダル表示
             if (dom_account_name) dom_account_name.innerHTML = `<font color="gray">SSS Extension が未インストールです</font>`;
+            Swal.fire({
+                title: '⚡ SSS Extension が必要です',
+                html: `
+                    <p style="text-align:left; margin-bottom:12px;">Ventus Wallet を使うには <strong>SSS Extension</strong> のインストールが必要です。</p>
+                    <ol style="text-align:left; line-height:2.2; padding-left:20px;">
+                        <li>🔧 <a href="https://chrome.google.com/webstore/detail/sss-extension/lliohepcpicdffkfknizddecpmlnmkp" target="_blank" rel="noopener noreferrer" style="color:#e65100; font-weight:bold;">SSS Extension をインストール</a>（Chrome 拡張機能）</li>
+                        <li>🔑 拡張機能を開いてアカウントを作成 または 秘密鍵をインポート</li>
+                        <li>🔗 拡張機能のアイコンをクリック → このページを「リンク」</li>
+                    </ol>
+                    <p style="margin-top:12px;"><a href="https://docs.sss-symbol.com/ja/category/users-guide" target="_blank" rel="noopener noreferrer" style="font-size:13px; color:#888;">📖 SSS Extension 使い方ガイド →</a></p>
+                `,
+                icon: 'info',
+                confirmButtonText: 'わかりました',
+                confirmButtonColor: '#ffa000',
+                allowOutsideClick: true,
+            });
         } else {
             // Extension はあるがアカウント未リンク → 既存メッセージ
             if (dom_account_name) dom_account_name.innerHTML = `<font color="gray">SSS未接続 - SSSをリンクしてください</font>`;
@@ -1772,8 +1787,6 @@ async function main() {
 async function initAccountAndUI() {
     const addr = window.SSS?.activeAddress;
     if (!addr) { console.warn('[initAccountAndUI] activeAddress が取得できません'); return; }
-
-    document.getElementById('onboarding-banner').style.display = 'none';
 
     // ネットワーク名表示を更新
     const dom_account_name = document.getElementById('account_name');
