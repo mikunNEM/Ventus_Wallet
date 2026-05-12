@@ -1852,7 +1852,7 @@ async function initAccountAndUI() {
 
 async function handleSSS(activeAddress) {
     // フォーム値を取得
-    const toAddress = (document.getElementById('form-addr')?.value ?? '').replace(/-/g, '').replace(/[\s\u3000]/g, '');
+    const toAddress = (document.getElementById('form-addr')?.value ?? '').replace(/[^A-Za-z2-7]/g, '').toUpperCase();
     const mosaicIdHex = document.querySelector('.select_m1')?.value ?? '';
     const amountRaw = document.getElementById('form-amount')?.value ?? '';
     const message = document.getElementById('form-message')?.value ?? '';
@@ -1978,7 +1978,7 @@ async function handleSSS_agg(activeAddress) {
         const innerTxs = [];
 
         for (let i = 0; i < addr1.length; i++) {
-            const toAddress = addr1[i];
+            const toAddress = (addr1[i] ?? '').replace(/[^A-Za-z2-7]/g, '').toUpperCase();
             if (!toAddress) continue;
 
             // 行ごとに上書き可能な値
@@ -2838,7 +2838,7 @@ async function Msig_account(activeAddress) {
 async function handleSSS_multisig(activeAddress) {
     // モーダル内のセレクトから値を取得
     const multisigAddr = document.querySelector('.select_msig_send')?.value ?? '';
-    const toAddress = (document.getElementById('multisig_to')?.value ?? '').trim();
+    const toAddress = (document.getElementById('multisig_to')?.value ?? '').replace(/[^A-Za-z2-7]/g, '').toUpperCase();
     const mosaicIdHex = document.querySelector('.select_m_msig')?.value ?? '';
     const amountRaw = document.getElementById('multisig_amount')?.value ?? '0';
     const message = document.getElementById('multisig_message2')?.value ?? '';
