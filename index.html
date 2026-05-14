@@ -1888,7 +1888,7 @@
       for (let i = 0; i < rows.length; i++) {
         const cells = rows[i].split(',');
         address1[i] = cleanAddress(cells[1]);
-        if (cells[2] !== undefined) amount1[i] = cells[2] === '' ? '0' : cells[2];
+        if (cells[2] !== undefined) amount1[i] = cells[2];
         if (cells[3] !== undefined) mosaic1[i] = cells[3];
         if (cells[4] !== undefined) {
           if (byteLengthUTF8(cells[4]) > 1023) {
