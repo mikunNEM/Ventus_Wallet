@@ -241,7 +241,7 @@ h4 {
 .left {
   width: 720px;
   position: fixed;
-  height: 100vh;
+  bottom: 0;
   overflow-y: auto;
 }
 
@@ -249,7 +249,7 @@ h4 {
   .left {
     width: 360px;
     position: fixed;
-    height: 100vh;
+    bottom: 0;
     overflow-y: auto;
   }
 }
