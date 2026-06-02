@@ -200,12 +200,32 @@ black-bg(ハンバーガーメニュー解除用bg)
 }
 /********************************************/
 
+.page-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 80px 0 50px;
+  pointer-events: none;
+}
+
+@media screen and (max-width: 480px) {
+  .page-header {
+    height: 60px;
+    padding: 0 16px;
+  }
+}
+
 h1 {
   color:rgb(205, 0, 255);
   font-size: 4rem;
   font-weight: bold;
-  text-align: right;
-  margin: 50px 80px 0px auto;
+  margin: 0;
   font-family: 'Sacramento', cursive;
   text-shadow: 2px 2px 3px white;
 }
@@ -219,12 +239,10 @@ h2 {
 }
 
 h3 {
-  font-size: 40px; 
+  font-size: 28px;
   font-family: 'Itim', cursive;
-  /*display: flex;
-  justify-content: flex-end;*/
-  text-align: right;
-  margin: 0px 80px 10px auto;
+  color: rgb(205, 0, 255);
+  margin: 0;
   text-shadow: 2px 2px 3px white;
 }
 
@@ -241,6 +259,8 @@ h4 {
 .left {
   width: 720px;
   position: fixed;
+  left: 50px;
+  top: 80px;
   bottom: 0;
   overflow-y: auto;
 }
@@ -249,17 +269,25 @@ h4 {
   .left {
     width: 360px;
     position: fixed;
+    left: 0;
+    top: 60px;
     bottom: 0;
     overflow-y: auto;
   }
 }
 
 .right {
-  overflow: auto;
+  position: fixed;
+  left: 780px;
+  right: 50px;
+  top: 80px;
+  bottom: 0;
+  overflow-y: auto;
 }
 
 @media screen and (max-width:  480px) {
   .right {
+    position: static;
     width: 360px;
     overflow: auto;
   }
@@ -505,9 +533,8 @@ input[type="file"] {
 .tx-card {
   background: rgb(255, 255, 255,0.8);
   border-radius: 16px;
-  width: 730px;
-  margin-left: 750px;
-  margin-top: 40px;
+  width: auto;
+  margin: 0;
   padding: 32px 32px 32px 32px;
   box-shadow: 5px 5px 5px rgb(102, 113, 102);
 }
@@ -917,7 +944,7 @@ ul {
 .wrapper {
   display: flex;
   justify-content: space-between;
-  margin: 25px 50px auto 50px;
+  margin: 0;
 }
 
 hr {
