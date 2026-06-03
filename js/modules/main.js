@@ -744,7 +744,7 @@ async function initAccountDisplay(accountData) {
                 try {
                     const rawMosaic = mosaics.find(x => x.id.toUpperCase() === m.id.toUpperCase());
                     if (!rawMosaic) continue;
-                    const moInfo = await getMosaicInfoCached(m.id);
+                    const { moInfo } = await getMosaicInfoCached(m.id);
                     const div = moInfo.divisibility;
                     const dispAmt = (Number(rawMosaic.amount) / 10 ** div).toLocaleString(undefined, { maximumFractionDigits: 6 });
                     itemEls[i].amountEl.textContent = dispAmt;
