@@ -205,7 +205,7 @@ black-bg(ハンバーガーメニュー解除用bg)
   top: 0;
   left: 0;
   right: 0;
-  height: 80px;
+  height: 100px;
   z-index: 50;
   display: flex;
   align-items: center;
@@ -214,10 +214,29 @@ black-bg(ハンバーガーメニュー解除用bg)
   pointer-events: none;
 }
 
+#m_ns_bar {
+  position: fixed;
+  top: 100px;
+  left: 0;
+  right: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 45;
+}
+
 @media screen and (max-width: 480px) {
   .page-header {
-    height: 60px;
+    height: 70px;
     padding: 0 16px;
+  }
+  #m_ns_bar {
+    top: 70px;
+    height: 44px;
+    gap: 6px;
+    flex-wrap: wrap;
   }
 }
 
@@ -259,11 +278,15 @@ h4 {
   text-shadow: 2px 2px 3px white;
 }
 
+body {
+  overflow: hidden;
+}
+
 .left {
   position: fixed;
   left: 50px;
   right: calc(50% + 10px);
-  top: 80px;
+  top: 148px;
   bottom: 0;
   overflow-y: auto;
 }
@@ -283,7 +306,7 @@ h4 {
   position: fixed;
   left: calc(50% + 10px);
   right: 50px;
-  top: 80px;
+  top: 148px;
   bottom: 0;
   overflow-y: auto;
 }
@@ -322,10 +345,6 @@ button.accountInfo{
   box-shadow: 5px 5px 5px rgb(102, 113, 102);
 }
 
-.account-card #m_ns_button {
-  text-align: right;
-}
-
 .account-card h2 {
   font-size: 2rem;
 }
@@ -334,7 +353,7 @@ button.accountInfo{
   font-family: 'Itim', cursive;
   font-size: 22px;
   position: absolute;
-  top: 48px;
+  top: 10px;
   right: 30px;
   text-shadow: 2px 2px 3px white;
 }
