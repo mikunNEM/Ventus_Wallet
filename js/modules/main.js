@@ -118,11 +118,16 @@ function comma3(str) {
 
 function Onclick_Copy(copyText) {
     navigator.clipboard.writeText(copyText);
-    const btn = document.querySelector('h2');
-    const msg = document.createElement('div');
-    msg.innerHTML = `　　　　<strong style="color: green;"><font size="6">Copied!</font></strong>`;
-    btn.replaceWith(msg);
-    setTimeout(() => msg.replaceWith(btn), 700);
+    const btn = document.getElementById(copyText);
+    if (!btn) return;
+    const existing = btn.nextElementSibling;
+    if (existing && existing.classList.contains('copied-msg')) existing.remove();
+    const msg = document.createElement('span');
+    msg.className = 'copied-msg';
+    msg.textContent = 'Copied!';
+    msg.style.cssText = 'color:green; font-weight:bold; font-size:13px; margin-left:6px;';
+    btn.insertAdjacentElement('afterend', msg);
+    setTimeout(() => msg.remove(), 1500);
 }
 
 // v2 の Onclick_Decryption と同等（setEncryptedMessage + requestSignDecription）
