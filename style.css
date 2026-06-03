@@ -4460,12 +4460,17 @@ th,td {
 
 .cmd-wrapper {
   position: relative;
-  display: inline-block;
-  min-width: 220px;
-  max-width: 100%;
+  display: block;
+  width: 100%;
   font-size: 14px;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.form-mosaic_ID {
+  flex: 1;
+  max-width: 400px;
+  min-width: 0;
 }
 
 .cmd-trigger {
@@ -4501,13 +4506,22 @@ th,td {
   display: none;
 }
 
-.cmd-trigger-text {
+.cmd-trigger-name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #2f4f4f;
   font-size: 13px;
+}
+
+.cmd-trigger-amount {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #2563eb;
+  white-space: nowrap;
+  font-weight: 600;
+  margin-left: 4px;
 }
 
 .cmd-arrow {
@@ -4600,6 +4614,15 @@ th,td {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.cmd-item-amount {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #2563eb;
+  white-space: nowrap;
+  padding-left: 8px;
+  font-weight: 600;
 }
 
 .cmd-hidden-select {

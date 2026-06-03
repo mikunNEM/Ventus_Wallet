@@ -615,12 +615,14 @@ async function initAccountDisplay(accountData) {
         trigger.className = 'cmd-trigger';
         trigger.innerHTML = `
             <img class="cmd-trigger-thumb" />
-            <span class="cmd-trigger-text">${list[0]?.name ?? ''}</span>
+            <span class="cmd-trigger-name">${list[0]?.name ?? ''}</span>
+            <span class="cmd-trigger-amount"></span>
             <span class="cmd-arrow">▾</span>`;
         wrapper.appendChild(trigger);
 
-        const triggerThumb = trigger.querySelector('.cmd-trigger-thumb');
-        const triggerText  = trigger.querySelector('.cmd-trigger-text');
+        const triggerThumb  = trigger.querySelector('.cmd-trigger-thumb');
+        const triggerName   = trigger.querySelector('.cmd-trigger-name');
+        const triggerAmount = trigger.querySelector('.cmd-trigger-amount');
 
         // ドロップダウンリスト
         const listEl = document.createElement('div');
@@ -643,11 +645,15 @@ async function initAccountDisplay(accountData) {
             text.className = 'cmd-item-text';
             text.textContent = m.name;
 
+            const amountEl = document.createElement('span');
+            amountEl.className = 'cmd-item-amount';
+
             item.appendChild(placeholder);
             item.appendChild(thumb);
             item.appendChild(text);
+            item.appendChild(amountEl);
             listEl.appendChild(item);
-            return { item, placeholder, thumb };
+            return { item, placeholder, thumb, amountEl };
         });
 
         wrapper.appendChild(listEl);
@@ -687,7 +693,8 @@ async function initAccountDisplay(accountData) {
             itemEls.forEach(({ item }, i) => {
                 item.classList.toggle('selected', i === idx);
             });
-            triggerText.textContent = list[idx]?.name ?? value;
+            triggerName.textContent = list[idx]?.name ?? value;
+            triggerAmount.textContent = itemEls[idx]?.amountEl?.textContent ?? '';
             setTriggerThumb(url ?? null);
             sel.value = value;
             // change イベントを発火して既存の handleChange に繋ぐ
@@ -730,13 +737,40 @@ async function initAccountDisplay(accountData) {
             }
         })();
 
+        // ── 保有量をバックグラウンドで非同期取得 ──
+        (async () => {
+            for (let i = 0; i < list.length; i++) {
+                const m = list[i];
+                try {
+                    const rawMosaic = mosaics.find(x => x.id.toUpperCase() === m.id.toUpperCase());
+                    if (!rawMosaic) continue;
+                    const moInfo = await getMosaicInfoCached(m.id);
+                    const div = moInfo.divisibility;
+                    const dispAmt = (Number(rawMosaic.amount) / 10 ** div).toLocaleString(undefined, { maximumFractionDigits: 6 });
+                    itemEls[i].amountEl.textContent = dispAmt;
+                    if (sel.value.toUpperCase() === m.id.toUpperCase()) {
+                        triggerAmount.textContent = dispAmt;
+                    }
+                } catch { }
+                await new Promise(r => setTimeout(r, 50));
+            }
+        })();
+
         // 外部から値・サムネイルを同期するメソッドを wrapper に追加
         wrapper._syncValue = (value) => {
             const idx = list.findIndex(m => m.id.toUpperCase() === value.toUpperCase());
             if (idx < 0) return;
             itemEls.forEach(({ item }, i) => item.classList.toggle('selected', i === idx));
-            triggerText.textContent = list[idx].name;
+            triggerName.textContent = list[idx].name;
+            triggerAmount.textContent = itemEls[idx]?.amountEl?.textContent ?? '';
             setTriggerThumb(thumbCache.get(list[idx].id) ?? null);
+        };
+        wrapper._setAmount = (text) => { triggerAmount.textContent = text; };
+        wrapper._setItemAmount = (mosaicId, text) => {
+            const idx = list.findIndex(m => m.id.toUpperCase() === mosaicId.toUpperCase());
+            if (idx < 0) return;
+            itemEls[idx].amountEl.textContent = text;
+            if (sel.value.toUpperCase() === mosaicId.toUpperCase()) triggerAmount.textContent = text;
         };
 
         return { sel, wrapper };
@@ -846,8 +880,11 @@ async function initAccountDisplay(accountData) {
             const moInfo = await getMosaicInfo(mosaicIdHex);
             const div = moInfo.divisibility;
             const dispAmt = (Number(m.amount) / 10 ** div).toLocaleString(undefined, { maximumFractionDigits: 6 });
-            if (hoyu) hoyu.textContent = `保有量 : ${dispAmt}　`;
-            if (hoyu_agg) hoyu_agg.textContent = `保有量 : ${dispAmt}　　　　　　`;
+            // トリガー内に保有量を表示（#hoyu-ryo は使用しない）
+            if (wr1?._setAmount) wr1._setAmount(dispAmt);
+            if (wr2?._setAmount) wr2._setAmount(dispAmt);
+            if (wr1?._setItemAmount) wr1._setItemAmount(mosaicIdHex, dispAmt);
+            if (wr2?._setItemAmount) wr2._setItemAmount(mosaicIdHex, dispAmt);
 
             // 期限切れチェック (duration=0 は無期限)
             if (moInfo.duration !== '0' && Number(moInfo.duration) > 0) {
