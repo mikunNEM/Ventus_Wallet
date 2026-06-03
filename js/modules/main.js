@@ -116,17 +116,15 @@ function comma3(str) {
     return str.replace(/(\d)(?=(\d\d\d)+(?!\d))/g, '$1,');
 }
 
-function Onclick_Copy(copyText) {
+function Onclick_Copy(el, copyText) {
     navigator.clipboard.writeText(copyText);
-    const btn = document.getElementById(copyText);
-    if (!btn) return;
-    const existing = btn.nextElementSibling;
+    const existing = el.nextElementSibling;
     if (existing && existing.classList.contains('copied-msg')) existing.remove();
     const msg = document.createElement('span');
     msg.className = 'copied-msg';
     msg.textContent = 'Copied!';
     msg.style.cssText = 'color:green; font-weight:bold; font-size:13px; margin-left:6px;';
-    btn.insertAdjacentElement('afterend', msg);
+    el.insertAdjacentElement('afterend', msg);
     setTimeout(() => msg.remove(), 1500);
 }
 
@@ -453,7 +451,7 @@ async function initAccountDisplay(accountData) {
 
     // アドレス表示
     setHTML('wallet-addr',
-        `<div class="copy_container"> ${addr}<input type="image" src="src/copy.png" class="copy_bt" height="30px" id="${addr}" onclick="Onclick_Copy(this.id);" /></div>`);
+        `<div class="copy_container"> ${addr}<input type="image" src="src/copy.png" class="copy_bt" height="30px" id="${addr}" onclick="Onclick_Copy(this, this.id);" /></div>`);
 
     setHTML('aInfo-addr',
         `<div style="text-align: center;padding-top: 8px"><big><font color="green">${addr}</font></big></div>`);
@@ -1285,7 +1283,7 @@ async function showTransactions(activeAddress, pageNumber) {
         const fromRow = document.createElement('div');
         fromRow.className = 'copy_container';
         fromRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;color:#2f4f4f;line-height:1.6;';
-        fromRow.innerHTML = `<span style="color:#aaa;min-width:38px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;">From</span><span style="word-break:break-all;">${signerAddr}</span><input type="image" src="src/copy.png" class="copy_bt" height="16px" id="${signerAddr}" onclick="Onclick_Copy(this.id);" style="flex-shrink:0;opacity:0.6;"/>`;
+        fromRow.innerHTML = `<span style="color:#aaa;min-width:38px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;">From</span><span style="word-break:break-all;">${signerAddr}</span><input type="image" src="src/copy.png" class="copy_bt" height="16px" id="${signerAddr}" onclick="Onclick_Copy(this, this.id);" style="flex-shrink:0;opacity:0.6;"/>`;
         card.appendChild(fromRow);
 
         // ══════════════════════════════════════════════════════
@@ -1296,7 +1294,7 @@ async function showTransactions(activeAddress, pageNumber) {
             const toRow = document.createElement('div');
             toRow.className = 'copy_container';
             toRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px;color:#2f4f4f;line-height:1.6;';
-            toRow.innerHTML = `<span style="color:#aaa;min-width:38px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;">To</span><span style="word-break:break-all;">${recipientAddress}</span><input type="image" src="src/copy.png" class="copy_bt" height="16px" id="${recipientAddress}" onclick="Onclick_Copy(this.id);" style="flex-shrink:0;opacity:0.6;"/>`;
+            toRow.innerHTML = `<span style="color:#aaa;min-width:38px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;">To</span><span style="word-break:break-all;">${recipientAddress}</span><input type="image" src="src/copy.png" class="copy_bt" height="16px" id="${recipientAddress}" onclick="Onclick_Copy(this, this.id);" style="flex-shrink:0;opacity:0.6;"/>`;
             card.appendChild(toRow);
 
             const mosaics = tx.mosaics ?? [];
