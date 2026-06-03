@@ -317,7 +317,7 @@ button.accountInfo{
   background: rgb(255, 255, 255,0.8);
   border-radius: 16px;
   margin: 0px 16px 8px 16px;
-  padding: 12px 18px 12px 18px;
+  padding: 10px 18px 10px 18px;
   position: relative;
   box-shadow: 5px 5px 5px rgb(102, 113, 102);
 }
@@ -326,11 +326,15 @@ button.accountInfo{
   text-align: right;
 }
 
+.account-card h2 {
+  font-size: 2rem;
+}
+
 .account-card #account_name {
   font-family: 'Itim', cursive;
-  font-size: 30px;
+  font-size: 22px;
   position: absolute;
-  top: 56px;
+  top: 48px;
   right: 30px;
   text-shadow: 2px 2px 3px white;
 }
@@ -368,9 +372,20 @@ button.accountInfo{
   box-shadow: 5px 5px 5px rgb(102, 113, 102);
 }
 
+.sender-card h2 {
+  font-size: 2rem;
+  margin-bottom: 0;
+}
+
 .sender-card #agg_button {
   margin-top: 8px;
   text-align: left;
+}
+
+.textfiled-wrapper > div:first-child {
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 90px;
 }
 
 .sender-card #multisig_message {
@@ -832,15 +847,21 @@ a.btn-style-link_5:hover{
 }
 
 .textfiled {
-  width: 400px;
-  height: 30px;
+  flex: 1;
+  width: auto;
+  max-width: 400px;
+  min-width: 0;
+  height: 28px;
   border-radius: 5px;
   border: 1px solid black;
 }
 
 .textfiled2 {
-  width: 400px;
-  height: 60px;
+  flex: 1;
+  width: auto;
+  max-width: 400px;
+  min-width: 0;
+  height: 52px;
   border-radius: 5px;
   border: 1px solid black;
 }
@@ -860,12 +881,12 @@ a.btn-style-link_5:hover{
 }
 
 #wallet-addr {
-  font-size: 24px;                 /* ウォレットアドレスの文字サイズ*/
+  font-size: 17px;
 }
 
 #wallet-xym {
   text-align: right;
-  font-size: 30px;
+  font-size: 22px;
   font-weight: 700;
 }
 
@@ -903,8 +924,8 @@ ul {
 }
 
 .container {
-  font-size: 24px;
-  margin: 20px 20px 20px 0px;
+  font-size: 18px;
+  margin: 8px 10px 8px 0px;
 }
 
 .container2 {        /* 追加する連署者*/
