@@ -209,7 +209,7 @@ black-bg(ハンバーガーメニュー解除用bg)
   z-index: 50;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 0 80px 0 50px;
   pointer-events: none;
 }
@@ -330,7 +330,7 @@ button.accountInfo{
   font-family: 'Itim', cursive;
   font-size: 30px;
   position: absolute;
-  top: 20px; 
+  top: 56px;
   right: 30px;
   text-shadow: 2px 2px 3px white;
 }
