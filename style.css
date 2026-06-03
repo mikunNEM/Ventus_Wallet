@@ -576,6 +576,10 @@ input[type="file"] {
   box-shadow: 5px 5px 5px rgb(102, 113, 102);
 }
 
+.tx-card h2 {
+  font-size: 2rem;
+}
+
 @media screen and (max-width: 480px) {
   .tx-card {
     background: rgb(255, 255, 255,0.8);
