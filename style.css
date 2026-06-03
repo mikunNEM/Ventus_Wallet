@@ -228,6 +228,9 @@ h1 {
   margin: 0;
   font-family: 'Sacramento', cursive;
   text-shadow: 2px 2px 3px white;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 h2 {
