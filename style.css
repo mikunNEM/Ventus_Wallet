@@ -18,13 +18,13 @@
 hamburger(ハンバーガーアイコン)
 =================================== */
 .hamburger {
-  position: absolute;
+  position: fixed;
   right: 20px;
-  top: 20px;
+  top: 28px;
   width: 50px;
   height: 40px;
   cursor: pointer;
-  z-index: 300;
+  z-index: 400;
 }
 
 .hamburger__line {
@@ -276,10 +276,6 @@ h4 {
   text-align: center;
   margin: 40px auto 40px auto;
   text-shadow: 2px 2px 3px white;
-}
-
-body {
-  overflow: hidden;
 }
 
 .left {
@@ -572,12 +568,19 @@ input[type="file"] {
   border-radius: 16px;
   width: auto;
   margin: 0;
-  padding: 32px 32px 32px 32px;
+  padding: 10px 32px 32px 32px;
   box-shadow: 5px 5px 5px rgb(102, 113, 102);
 }
 
 .tx-card h2 {
   font-size: 2rem;
+  margin: 0;
+}
+
+.tx-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 @media screen and (max-width: 480px) {
