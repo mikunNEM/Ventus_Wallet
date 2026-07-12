@@ -1547,15 +1547,24 @@ hr {
   position: absolute;
   right: 0;
   top: 0;
-  width: 50px;
-  height: 50px;
+  width: 70px;
+  height: 70px;
   line-height: 50px;
   text-align: center;
   cursor: pointer;
 }
 .close-btn i {
-  font-size: 20px;
+  padding: 15px;
+  font-size: 40px;
   color: #333;
+}
+.popup_m-inner .close-btn {
+  width: 50px;
+  height: 50px;
+}
+.popup_m-inner .close-btn i {
+  padding: 0;
+  font-size: 20px;
 }
 .black-background_m {
   position: absolute;
@@ -1741,21 +1750,6 @@ hr {
 }
 .popup_n-inner img {
   width: 100%;
-}
-.close-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 70px;
-  height: 70px;
-  line-height: 50px;
-  text-align: center;
-  cursor: pointer;
-}
-.close-btn i {
-  padding: 15px;
-  font-size: 40px;
-  color: #333;
 }
 .black-background_n {
   position: absolute;
@@ -2069,21 +2063,6 @@ hr {
 .popup_sn-inner img {
   width: 100%;
 }
-.close-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 70px;
-  height: 70px;
-  line-height: 50px;
-  text-align: center;
-  cursor: pointer;
-}
-.close-btn i {
-  padding: 15px;
-  font-size: 40px;
-  color: #333;
-}
 .black-background_sn {
   position: absolute;
   left: 0;
@@ -2215,21 +2194,6 @@ hr {
 }
 .popup_sup-inner img {
   width: 100%;
-}
-.close-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 70px;
-  height: 70px;
-  line-height: 50px;
-  text-align: center;
-  cursor: pointer;
-}
-.close-btn i {
-  padding: 15px;
-  font-size: 40px;
-  color: #333;
 }
 .black-background_sup {
   position: absolute;
@@ -2364,21 +2328,6 @@ hr {
 .popup_agg-inner .cmd-trigger-thumb {
   width: 38px;
 }
-.close-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 70px;
-  height: 70px;
-  line-height: 50px;
-  text-align: center;
-  cursor: pointer;
-}
-.close-agg i {
-  padding: 15px;
-  font-size: 40px;
-  color: #333;
-}
 .black-background_agg {
   position: absolute;
   left: 0;
@@ -2511,21 +2460,6 @@ hr {
 .popup_r-inner img {
   width: 100%;
 }
-.close-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 70px;
-  height: 70px;
-  line-height: 50px;
-  text-align: center;
-  cursor: pointer;
-}
-.close-btn i {
-  padding: 15px;
-  font-size: 40px;
-  color: #333;
-}
 .black-background_r {
   position: absolute;
   left: 0;
@@ -2655,21 +2589,6 @@ hr {
 }
 .popup_L-inner img {
   width: 100%;
-}
-.close-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 70px;
-  height: 70px;
-  line-height: 50px;
-  text-align: center;
-  cursor: pointer;
-}
-.close-btn i {
-  padding: 15px;
-  font-size: 40px;
-  color: #333;
 }
 .black-background_L {
   position: absolute;
@@ -2801,21 +2720,6 @@ hr {
 }
 .popup_Meta-inner img {
   width: 100%;
-}
-.close-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 70px;
-  height: 70px;
-  line-height: 50px;
-  text-align: center;
-  cursor: pointer;
-}
-.close-btn i {
-  padding: 15px;
-  font-size: 40px;
-  color: #333;
 }
 .black-background_Meta {
   position: absolute;
@@ -2973,21 +2877,6 @@ hr {
 .popup_aInfo-inner img {
   width: 100%;
 }
-.close-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 70px;
-  height: 70px;
-  line-height: 50px;
-  text-align: center;
-  cursor: pointer;
-}
-.close-btn i {
-  padding: 15px;
-  font-size: 40px;
-  color: #333;
-}
 .black-background_aInfo {
   position: absolute;
   left: 0;
@@ -3119,21 +3008,6 @@ hr {
 .popup_dona-inner img {
   width: 100%;
 }
-.close-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 70px;
-  height: 70px;
-  line-height: 50px;
-  text-align: center;
-  cursor: pointer;
-}
-.close-btn i {
-  padding: 15px;
-  font-size: 40px;
-  color: #333;
-}
 .black-background_dona {
   position: absolute;
   left: 0;
@@ -3263,21 +3137,6 @@ hr {
 }
 .popup_Msig-inner img {
   width: 100%;
-}
-.close-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 70px;
-  height: 70px;
-  line-height: 50px;
-  text-align: center;
-  cursor: pointer;
-}
-.close-btn i {
-  padding: 15px;
-  font-size: 40px;
-  color: #333;
 }
 .black-background_Msig {
   position: absolute;
@@ -3421,21 +3280,6 @@ hr {
 }
 .popup_multisig-inner img {
   width: 100%;
-}
-.close-btn {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 70px;
-  height: 70px;
-  line-height: 50px;
-  text-align: center;
-  cursor: pointer;
-}
-.close-btn i {
-  padding: 15px;
-  font-size: 40px;
-  color: #333;
 }
 .black-background_multisig {
   position: absolute;
