@@ -4210,6 +4210,12 @@ th,td {
 #holder_table td, #holder_table th {
   white-space: nowrap;
 }
+/* Metadataの Value(値) 列だけは中身が長くなりがちなので、幅を固定して折り返す */
+#Meta_table td:nth-child(4), #Meta_table th:nth-child(4) {
+  white-space: normal;
+  word-break: break-all;
+  max-width: 420px;
+}
 
 /* ═══════════════════════════════════════════════════
    Transaction History — Modern Card UI
