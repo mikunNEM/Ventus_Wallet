@@ -1793,6 +1793,8 @@ async function main() {
     window.ex_date2           = () => ex_date2();
     window.feeCalc            = () => feeCalc();
     window.MetaKey_select     = () => MetaKey_select();
+    window.updateSupplyPlaceholder = () => updateSupplyPlaceholder();
+    window.formatSupplyAmountInput = () => formatSupplyAmountInput();
 
     // マルチシグ関連初期化
     // initMsigAddButton は未実装（将来実装予定）
@@ -1878,6 +1880,8 @@ async function initAccountAndUI() {
     window.ex_date2 = () => ex_date2();
     window.feeCalc = () => feeCalc();
     window.MetaKey_select = () => MetaKey_select();
+    window.updateSupplyPlaceholder = () => updateSupplyPlaceholder();
+    window.formatSupplyAmountInput = () => formatSupplyAmountInput();
 
     console.log('[initAccountAndUI] step: window assignments done');
     // initMsigAddButton は未実装（将来実装予定）
@@ -2098,6 +2102,11 @@ async function Onclick_mosaic(activeAddress) {
     try {
         const signerPubKey = window.SSS.activePublicKey;
         const supply = BigInt(Math.round(supplyAmount * Math.pow(10, divisibility)));
+
+        if (supply > MAX_SUPPLY_RAW) {
+            Swal.fire({ title: '供給量が上限を超えています。', text: '入力欄のプレースホルダーに表示されている数値までが上限です。', icon: 'warning' });
+            return;
+        }
 
         const { defTx, supplyTx } = buildMosaicDefinitionEmbeddedTxs(
             supplyMutable, transferable, restrictable, revokable,
@@ -4420,20 +4429,142 @@ async function ex_date1() {
     }
 }
 
+// 可分性に応じて供給量の入力可能範囲ヒントの小数点位置を更新
+// 供給量の絶対上限は「8,999,999,999 × 10^6」で固定（Symbolの仕様）。
+// SupplyAmount欄はこれを可分性(10^divisibility)で割った「見た目の単位」で入力するため、
+// 可分性が変わると小数点の位置だけがずれる。
+// プレースホルダーは入力中に消えて見えなくなるため、常時表示のヒント要素に出す。
+function updateSupplyPlaceholder() {
+    const divisibility = Number(document.getElementById('Divisibility')?.value ?? 0);
+    const hintEl = document.getElementById('supply-amount-range');
+    if (!hintEl) return;
+    const raw = '8999999999000000';
+    const intLen = raw.length - divisibility;
+    const max = divisibility === 0 ? raw : `${raw.slice(0, intLen)}.${raw.slice(intLen)}`;
+    hintEl.textContent = `1 〜 ${max}`;
+}
+
+// モザイク供給量の絶対上限（raw最小単位）: 8,999,999,999 × 10^6（Symbolの仕様、可分性に関わらず固定）
+const MAX_SUPPLY_RAW = 8999999999000000n;
+
+// 供給量入力を可分性に応じて自動フォーマット
+// 末尾N桁（Nは可分性）を小数部として扱うレジ入力方式（数字を打つと自動で小数点が入る）
+// 併せて上限超過を判定し、エラー表示を切り替える
+function formatSupplyAmountInput() {
+    const divisibility = Number(document.getElementById('Divisibility')?.value ?? 0);
+    const input = document.getElementById('SupplyAmount');
+    const errorEl = document.getElementById('supply-amount-error');
+    if (!input) return;
+    // 全角数字（IMEが全角モードの場合）を半角に正規化してから数字以外を除去
+    const halfWidth = input.value.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+    const digits = halfWidth.replace(/\D/g, '');
+    if (!digits) {
+        input.value = '';
+        if (errorEl) errorEl.style.display = 'none';
+        input.classList.remove('msig-send-input-error');
+        return;
+    }
+
+    const overMax = BigInt(digits) > MAX_SUPPLY_RAW;
+
+    if (divisibility === 0) {
+        input.value = digits.replace(/^0+(?=\d)/, '');
+    } else {
+        const padded = digits.padStart(divisibility + 1, '0');
+        const intPart = padded.slice(0, padded.length - divisibility).replace(/^0+(?=\d)/, '') || '0';
+        const decPart = padded.slice(padded.length - divisibility);
+        input.value = `${intPart}.${decPart}`;
+    }
+
+    if (errorEl) errorEl.style.display = overMax ? 'block' : 'none';
+    input.classList.toggle('msig-send-input-error', overMax);
+}
+
+// アカウント初期化を待たずに使える純粋なUIヘルパーなので、定義直後に即座にwindowへ公開する
+// （initAccountAndUI等の中だけで公開すると、ウォレット接続が終わるまでinput属性から呼べない）
+window.updateSupplyPlaceholder = updateSupplyPlaceholder;
+window.formatSupplyAmountInput = formatSupplyAmountInput;
+
+let ex_date2_seq = 0;
+
 async function ex_date2() {
+    const mySeq = ++ex_date2_seq;
     const blocks = Number(document.getElementById('Duration2')?.value ?? 0);
+    const nsName = (document.getElementById('Namespace')?.value ?? '').trim().toLowerCase();
     const el = document.getElementById('ex_date2');
     if (!el) return;
     try {
         const chain = await getChainInfo();
-        const currentBlock = await getBlockByHeight(Number(chain.height));
-        const ts = Number(currentBlock.timestamp) + blocks * 30000;
-        const date = new Date((epochAdjustment + ts / 1000) * 1000);
-        el.innerHTML = `<p style="font-size:20px;color:blue">有効期限　${date.toLocaleString('ja-JP')}</p>`;
+        if (mySeq !== ex_date2_seq) return; // 後発の呼び出しに追い越された場合は結果を捨てる
+        const currentHeight = Number(chain.height);
+        const currentBlock = await getBlockByHeight(currentHeight);
+        const currentTs = Number(currentBlock.timestamp);
+        // 1日 ≒ 2880ブロック（30秒/ブロック）
+        const daysStr = (blocks / 2880).toLocaleString('ja-JP', { maximumFractionDigits: 1 });
+
+        function heightToDateStr(height) {
+            const diffBlocks = height - currentHeight;
+            const ts = currentTs + diffBlocks * 30000;
+            return new Date((epochAdjustment + ts / 1000) * 1000).toLocaleString('ja-JP', {
+                year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        // 入力中のネームスペース名が既存アカウントに存在するか確認（更新かどうかの判定）
+        let existingEndHeight = null;
+        if (nsName) {
+            try {
+                const nsPath = sdkSymbol.generateNamespacePath(nsName);
+                const nsHexId = nsPath[nsPath.length - 1].toString(16).toUpperCase();
+                const nsInfo = await fetchJson(new URL(`/namespaces/${nsHexId}`, NODE));
+                existingEndHeight = Number(nsInfo.namespace.endHeight);
+            } catch {
+                existingEndHeight = null; // 見つからない = 新規登録扱い
+            }
+        }
+
+        if (mySeq !== ex_date2_seq) return; // 後発の呼び出しに追い越された場合は結果を捨てる
+
+        if (existingEndHeight) {
+            el.innerHTML = `
+                <div>レンタル期間　約${daysStr}日</div>
+                <div>現在の有効期限　${heightToDateStr(existingEndHeight)}</div>
+                <div style="font-size:16px;color:blue;font-weight:bold;">更新後の有効期限　${heightToDateStr(existingEndHeight + blocks)}</div>
+            `;
+        } else {
+            el.innerHTML = `
+                <div>レンタル期間　約${daysStr}日</div>
+                <div style="font-size:16px;color:blue;font-weight:bold;">有効期限（新規登録）　${heightToDateStr(currentHeight + blocks)}</div>
+            `;
+        }
     } catch (e) {
         console.warn('[ex_date2]', e);
     }
 }
+
+// レンタル期間（Duration2）の範囲チェック（86400〜5256000ブロック）をリアルタイムに表示
+function validateDuration2() {
+    const input = document.getElementById('Duration2');
+    const errorEl = document.getElementById('duration2-error');
+    if (!input) return;
+    const raw = input.value.trim();
+    const val = Number(raw);
+    const outOfRange = raw !== '' && (val < 86400 || val > 5256000);
+    if (errorEl) errorEl.style.display = outOfRange ? 'block' : 'none';
+    input.classList.toggle('msig-send-input-error', outOfRange);
+}
+window.validateDuration2 = validateDuration2;
+
+// 入力のたびにex_date2/feeCalcを叩くとAPI呼び出しが多すぎるため、入力が一旦止まってから実行する（デバウンス）
+let ns_duration_debounceTimer = null;
+function debounced_ex_date2_feeCalc() {
+    clearTimeout(ns_duration_debounceTimer);
+    ns_duration_debounceTimer = setTimeout(() => {
+        ex_date2();
+        feeCalc();
+    }, 400);
+}
+window.debounced_ex_date2_feeCalc = debounced_ex_date2_feeCalc;
 
 async function feeCalc() {
     const blocks = Number(document.getElementById('Duration2')?.value ?? 0);

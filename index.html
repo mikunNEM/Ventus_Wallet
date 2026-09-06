@@ -301,27 +301,29 @@
   </div><!-- #popup -->
 
 
-  <!--    popup  モザイク作成   ------------------------------------>
+  <!--    popup  モザイク作成（msig-send-cardパターン）   ------------------------------------>
   <div id="js-popup_m" class="popup_m">
-    <div class="popup_m-inner">
-      <div class="close-btn" id="js-close-btn_m"><i class="fas fa-times"></i></div>
-      <div class="Form">
-        <h4>Mosaic</h4>
-        <div class="Form-Item">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">供給量</span></p>
-          <input type="text" class="Form-Item-Input" id="SupplyAmount" placeholder="　1 〜 8999999999000000">
+    <div class="popup_m-inner msig-send-card msig-send-card--wide">
+
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">🪙</span>
+          <div>
+            <div class="msig-send-title">Mosaic 作成</div>
+            <div class="msig-send-subtitle">Mosaic Definition</div>
+          </div>
         </div>
-        <div class="Form-Item">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">有効期限</span><small>&nbsp;&nbsp;<br>　約30秒 = 1
-              (Block)</br>　無期限 = 0</small></p>
-          <input type="text" class="Form-Item-Input" id="Duration1" placeholder=" 　0 〜 315360000 (Block)"
-            onchange="ex_date1();" />
-          <div id="ex_date1" style="text-align:right"></div>
-        </div>
-        <div class="Form-Item">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">可分性</span><small><br>　小数点以下の桁数</small></p>
-          <div class="Form-Item-Input" style="text-align: center">
-            <select class="divisibility" id="Divisibility">
+        <div class="msig-send-close" id="js-close-btn_m"><i class="fas fa-times"></i></div>
+      </div>
+
+      <div class="msig-send-form">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">🔢 可分性<br>
+            <small style="font-weight:400;color:#888;">小数点以下の桁数</small>
+          </label>
+          <div class="msig-send-select">
+            <select class="divisibility" id="Divisibility" onchange="updateSupplyPlaceholder();formatSupplyAmountInput();">
               <option value="0">0</option>
               <option value="1">1</option>
               <option value="2">2</option>
@@ -332,34 +334,64 @@
             </select>
           </div>
         </div>
-        <div class="Form-Item">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">制限可</span>　⚠️</p>
-          <div class="toggle3">
-            <input type="checkbox" name="check3" value="Restrictable" id="Restrictable" />
-          </div>
-          　　　　　　<p>※モザイク制限は未実装です</p>
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="SupplyAmount">📦 供給量</label>
+          <div id="supply-amount-range" style="font-size:11px;color:#888;">1 〜 8999999999000000</div>
+          <input type="text" class="msig-send-input" id="SupplyAmount"
+            oninput="formatSupplyAmountInput();">
+          <div id="supply-amount-error" class="msig-send-error-text" style="display:none">⚠️ 供給量が上限を超えています</div>
         </div>
-        <div class="Form-Item">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">供給量可変</span>　⬇️⬆️</p>
-          <div class="toggle1">
-            <input type="checkbox" name="check1" value="Supply_M" id="Supply_M" />
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="Duration1">⏳ 有効期限<br>
+            <small style="font-weight:400;color:#888;">約30秒 = 1 (Block)　無期限 = 0</small>
+          </label>
+          <input type="text" class="msig-send-input" id="Duration1" placeholder="0 〜 315360000 (Block)"
+            onchange="ex_date1();" />
+          <div id="ex_date1" style="text-align:right;font-size:12px;color:#888;"></div>
+        </div>
+
+        <div class="msig-send-field">
+          <div class="msig-send-toggle-row">
+            <label class="msig-send-field-label">制限可　⚠️</label>
+            <div class="toggle3">
+              <input type="checkbox" name="check3" value="Restrictable" id="Restrictable" />
+            </div>
+          </div>
+          <div class="msig-send-note">※モザイク制限は未実装です</div>
+        </div>
+
+        <div class="msig-send-field">
+          <div class="msig-send-toggle-row">
+            <label class="msig-send-field-label">供給量可変　⬇️⬆️</label>
+            <div class="toggle1">
+              <input type="checkbox" name="check1" value="Supply_M" id="Supply_M" />
+            </div>
           </div>
         </div>
-        <div class="Form-Item">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">転送可</span>　➡️</p>
-          <div class="toggle2">
-            <input type="checkbox" name="check2" value="Transferable" id="Transferable" />
+
+        <div class="msig-send-field">
+          <div class="msig-send-toggle-row">
+            <label class="msig-send-field-label">転送可　➡️</label>
+            <div class="toggle2">
+              <input type="checkbox" name="check2" value="Transferable" id="Transferable" />
+            </div>
           </div>
         </div>
-        <div class="Form-Item">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">回収可</span>　♻︎</p>
-          <div class="toggle4">
-            <input type="checkbox" name="check4" value="Revokable" id="Revokable" />
+
+        <div class="msig-send-field">
+          <div class="msig-send-toggle-row">
+            <label class="msig-send-field-label">回収可　♻︎</label>
+            <div class="toggle4">
+              <input type="checkbox" name="check4" value="Revokable" id="Revokable" />
+            </div>
           </div>
         </div>
-        <div class="Form-Item">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required">トランザクション手数料</span></p>
-          <div class="Form-Item-Input" style="text-align: center">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">⛽ トランザクション手数料</label>
+          <div class="msig-send-select">
             <select class="re_maxFee" id="re_maxFee_m">
               <option value="0.04">0.04 xym (slow)</option>
               <option value="0.05">0.05 xym</option>
@@ -368,18 +400,43 @@
             </select>
           </div>
         </div>
-        <br>
-        <input type="button" onclick="Onclick_mosaic();" class="Form-Btn" id="js-popup_m" value="作成" />
-        <br>
-        <div style="text-align:center">レンタル手数料&nbsp; 50 XYM</div>
-        <br>
-        <div style="text-align:right"><button id="js-show-popup_sup" class="popup_sub_button">⬇️ 供給量変更 ⬆️</button></div>
-        <br>
-        <div style="text-align:right"><button id="js-show-popup_r" class="popup_sub_button">♻︎ モザイク回収 ♻︎</button></div>
-        <div style="text-align:center"><i><b><big>発行したモザイク</big></b></i></div>
 
-        <div style="text-align: right">
-          <div style="display: inline-block; _display: inline;">Page:</div>
+        <div class="msig-send-fee-simple">レンタル手数料　50 XYM</div>
+
+        <button class="msig-send-btn" onclick="Onclick_mosaic();" id="js-popup_m">
+          ✍️ 作成する
+          <span class="msig-send-btn-arrow">→</span>
+        </button>
+
+        <div class="msig-send-sublinks">
+          <button id="js-show-popup_sup" class="msig-send-sublink">⬇️ 供給量変更 ⬆️</button>
+          <button id="js-show-popup_r" class="msig-send-sublink">♻︎ モザイク回収 ♻︎</button>
+          <button id="js-show-popup_ms_list" class="msig-send-sublink">📋 発行したモザイク一覧</button>
+        </div>
+
+      </div>
+    </div>
+    <div class="black-background_m" id="js-black-bg_m"></div>
+  </div>
+
+  <!--    popup  発行したモザイク一覧（msig-send-cardパターン）   ------------------------------------>
+  <div id="js-popup_ms_list" class="popup_ms_list">
+    <div class="popup_ms_list-inner msig-send-card msig-send-card--full">
+
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">📋</span>
+          <div>
+            <div class="msig-send-title">発行したモザイク</div>
+            <div class="msig-send-subtitle">Issued Mosaics</div>
+          </div>
+        </div>
+        <div class="msig-send-close" id="js-close-btn_ms_list"><i class="fas fa-times"></i></div>
+      </div>
+
+      <div class="msig-send-form">
+        <div class="msig-send-pager">
+          Page:
           <select id="page_num_mosa1" onchange="select_Page_mosa1();">
             <option value="1">1</option>
             <option value="2">2</option>
@@ -403,36 +460,49 @@
             <option value="20">20</option>
           </select>
         </div>
-        <br>
-        <table id="ms_table"></table>
+        <div id="ms_table"></div>
       </div>
     </div>
-    <div class="black-background_m" id="js-black-bg_m"></div>
+    <div class="black-background_ms_list" id="js-black-bg_ms_list"></div>
   </div>
 
   <!-- ------------------------------------------->
 
-  <!--    popup  namespace 作成   -->
+  <!--    popup  namespace 作成（msig-send-cardパターン）   -->
   <div id="js-popup_n" class="popup_n">
-    <div class="popup_n-inner">
-      <div class="close-btn" id="js-close-btn_n"><i class="fas fa-times"></i></div>
-      <div class="Form2">
-        <h4>Namespace</h4>
-        <div class="Form-Item2">
-          <p class="Form-Item-Label"><span
-              class="Form-Item-Label-Required2">レンタル期間</span><small></br>　&nbsp;(Duration)&nbsp;&nbsp;　約30日 =
-              86,400</br>　　　　　　　　約1年 = 1,051,200</br>　　　　　　　　約5年 = 5,256,000</small></p>
-          <input type="text" class="Form-Item-Input_N" id="Duration2" placeholder=" 　86400 〜 5256000 (Block)"
-            onchange="ex_date2();feeCalc();" />
-          <div id="ex_date2" style="text-align:right"></div>
+    <div class="popup_n-inner msig-send-card msig-send-card--wide">
+
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">🏷️</span>
+          <div>
+            <div class="msig-send-title">Namespace 作成 / 更新</div>
+            <div class="msig-send-subtitle">Namespace Registration</div>
+          </div>
         </div>
-        <div class="Form-Item2">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required2">ネームスペース</span></br></p>
-          <input type="text" class="Form-Item-Input_N" id="Namespace" placeholder="" />
+        <div class="msig-send-close" id="js-close-btn_n"><i class="fas fa-times"></i></div>
+      </div>
+
+      <div class="msig-send-form">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="Namespace">🏷️ ネームスペース</label>
+          <input type="text" class="msig-send-input" id="Namespace" placeholder="" oninput="debounced_ex_date2_feeCalc();" />
         </div>
-        <div class="Form-Item2">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required2">トランザクション手数料</span></p>
-          <div class="Form-Item-Input" style="text-align: center">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="Duration2">⏳ レンタル期間（Duration）<br>
+            <small style="font-weight:400;color:#888;">約30日 = 86,400　約1年 = 1,051,200　約5年 = 5,256,000</small>
+          </label>
+          <input type="text" class="msig-send-input" id="Duration2" placeholder="86400 〜 5256000 (Block)"
+            oninput="validateDuration2();debounced_ex_date2_feeCalc();" />
+          <div id="duration2-error" class="msig-send-error-text" style="display:none">⚠️ 有効期限は86400〜5256000ブロックの範囲で入力してください</div>
+          <div id="ex_date2" style="text-align:right;font-size:12px;color:#888;"></div>
+        </div>
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">⛽ トランザクション手数料</label>
+          <div class="msig-send-select">
             <select class="re_maxFee" id="re_maxFee_n">
               <option value="0.02">0.02 xym (slow)</option>
               <option value="0.04">0.04 xym</option>
@@ -442,16 +512,47 @@
           </div>
         </div>
 
-        <div id="ns_fee" style="text-align:center"></div>
-        <input type="button" onclick="Onclick_Namespace();" class="Form-Btn" id="js-popup_n" value="作成 / 更新" />
-        <br>
-        <br>
-        <div style="text-align:right"><button id="js-show-popup_L" class="popup_sub_button">エイリアスリンク</button></div></br>
-        <div style="text-align:right"><button id="js-show-popup_sn" class="popup_sub_button">サブネームスペース</button></div>
-        <div style="text-align:center"><i><b><big>所有ネームスペース</big></b></i></div>
+        <div id="ns_fee" class="msig-send-fee-simple"></div>
 
-        <div style="text-align: right">
-          <div style="display: inline-block; _display: inline;">Page:</div>
+        <button class="msig-send-btn" onclick="Onclick_Namespace();" id="js-popup_n">
+          ✍️ 作成 / 更新する
+          <span class="msig-send-btn-arrow">→</span>
+        </button>
+
+        <div class="msig-send-sublinks">
+          <button id="js-show-popup_L" class="msig-send-sublink">🔗 エイリアスリンク</button>
+          <button id="js-show-popup_sn" class="msig-send-sublink">🏷️ サブネームスペース</button>
+          <button id="js-show-popup_ns_list" class="msig-send-sublink">📋 所有ネームスペース一覧</button>
+        </div>
+
+        <div class="msig-send-note">
+          ※ 「レンタル期間」＋「猶予期間」が<b>ネームスペース更新期限</b>になります。<br>
+          ※ <b>ネームスペース更新期限</b>の30日前(猶予期間)に、ステータスが無効❌になります。テストネットでは更新期限の1日前(猶予期間)に、ステータスが無効❌になります。
+        </div>
+
+      </div>
+    </div>
+    <div class="black-background_n" id="js-black-bg_n"></div>
+  </div>
+
+  <!--    popup  所有ネームスペース一覧（msig-send-cardパターン）   -->
+  <div id="js-popup_ns_list" class="popup_ns_list">
+    <div class="popup_ns_list-inner msig-send-card msig-send-card--wide">
+
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">📋</span>
+          <div>
+            <div class="msig-send-title">所有ネームスペース</div>
+            <div class="msig-send-subtitle">Owned Namespaces</div>
+          </div>
+        </div>
+        <div class="msig-send-close" id="js-close-btn_ns_list"><i class="fas fa-times"></i></div>
+      </div>
+
+      <div class="msig-send-form">
+        <div class="msig-send-pager">
+          Page:
           <select id="page_num_namespace" onchange="select_Page_namespace();">
             <option value="1">1</option>
             <option value="2">2</option>
@@ -475,39 +576,44 @@
             <option value="20">20</option>
           </select>
         </div>
-        <br>
-        <table id="ns_table"></table>
-        <br>
-        ※ 「レンタル期間」 ➕ 「猶予期間」 が<b>ネームスペース更新期限</b>になります。
-        <br>
-        <div>※ <b>ネームスペース更新期限</b>の 30日前(猶予期間)に、ステータスが無効❌になります。テストネットでは 更新期限の 1日前(猶予期間)に、ステータスが無効❌になります。</div>
+        <div id="ns_table"></div>
       </div>
     </div>
-    <div class="black-background_n" id="js-black-bg_n"></div>
+    <div class="black-background_ns_list" id="js-black-bg_ns_list"></div>
   </div>
 
-  <!--    popup  sub namespace 作成   ------>
+  <!--    popup  sub namespace 作成（msig-send-cardパターン）   ------>
   <div id="js-popup_sn" class="popup_sn">
-    <div class="popup_sn-inner">
-      <div class="close-btn" id="js-close-btn_sn"><i class="fas fa-times"></i></div>
-      <div class="Form_sn">
-        <h4>Sub Namespace</h4>
+    <div class="popup_sn-inner msig-send-card">
 
-        <div class="Form-Item_sn">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sn">ルートネームスペース</span></p>
-          <div id="rootNamespace_area" class="Form-Item-Input_sn" style="padding:2px 0;">
-            <span style="color:#aaa;font-size:12px;">読み込み中...</span>
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">🏷️</span>
+          <div>
+            <div class="msig-send-title">Sub Namespace 作成</div>
+            <div class="msig-send-subtitle">サブネームスペース登録</div>
           </div>
         </div>
+        <div class="msig-send-close" id="js-close-btn_sn"><i class="fas fa-times"></i></div>
+      </div>
 
-
-        <div class="Form-Item_sn">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sn">サブネームスペース</span></br></p>
-          <input type="text" class="Form-Item-Input_sn" id="subNamespace" placeholder="" />
+      <div class="msig-send-from-box">
+        <div class="msig-send-from-label">ルートネームスペース</div>
+        <div id="rootNamespace_area" class="msig-send-from-addr">
+          <span style="color:#aaa;font-size:12px;">読み込み中...</span>
         </div>
-        <div class="Form-Item_sn">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sn">トランザクション手数料</span></p>
-          <div class="Form-Item-Input" style="text-align: center">
+      </div>
+
+      <div class="msig-send-form">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="subNamespace">🏷️ サブネームスペース</label>
+          <input type="text" class="msig-send-input" id="subNamespace" placeholder="" />
+        </div>
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">⛽ トランザクション手数料</label>
+          <div class="msig-send-select">
             <select class="re_maxFee" id="re_maxFee_sn">
               <option value="0.02">0.02 xym (slow)</option>
               <option value="0.04">0.04 xym</option>
@@ -516,56 +622,70 @@
             </select>
           </div>
         </div>
-        <input type="button" onclick="Onclick_subNamespace();" class="Form-Btn" id="js-popup_sn" value="作成" />
-        <br>
-        <div style="text-align:center">レンタル手数料&nbsp; 10 XYM</div>
-        <br>
-        <br>
-        <br>
-        <div>※ ルートネームスペースのレンタル有効期限と、サブネームスペースのレンタル有効期限は同じです。
-          <br>※ サブネームスペースは２階層まで登録出来ます。
-          <br>
-          <br>
-          <登録例>
-            <br>ルートネームスペース aaa　 　　/　サブネームスペース bbb → aaa.bbb
-            <br>ルートネームスペース aaa.bbb　/　サブネームスペース ccc → aaa.bbb.ccc
+
+        <div class="msig-send-fee-simple">レンタル手数料　10 XYM</div>
+
+        <button class="msig-send-btn" onclick="Onclick_subNamespace();" id="js-popup_sn">
+          ✍️ 作成する
+          <span class="msig-send-btn-arrow">→</span>
+        </button>
+
+        <div class="msig-send-note">
+          ※ ルートネームスペースのレンタル有効期限と、サブネームスペースのレンタル有効期限は同じです。<br>
+          ※ サブネームスペースは２階層まで登録出来ます。<br><br>
+          &lt;登録例&gt;<br>
+          ルートネームスペース aaa　／　サブネームスペース bbb → aaa.bbb<br>
+          ルートネームスペース aaa.bbb／サブネームスペース ccc → aaa.bbb.ccc
         </div>
+
       </div>
     </div>
     <div class="black-background_sn" id="js-black-bg_sn"></div>
   </div>
 
-  <!--    popup  モザイク供給量変更   ------------------------------------>
+  <!--    popup  モザイク供給量変更（msig-send-cardパターン）   ------------------------------------>
   <div id="js-popup_sup" class="popup_sup">
-    <div class="popup_sup-inner">
-      <div class="close-btn" id="js-close-btn_sup"><i class="fas fa-times"></i></div>
-      <div class="Form_sup">
-        <h4>モザイク供給量変更</h4>
+    <div class="popup_sup-inner msig-send-card">
 
-        <div class="Form-Item">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sup">モザイク ID</span></p>
-          <div class="Form-Item-Input_sup" style="text-align: center">
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">⚖️</span>
+          <div>
+            <div class="msig-send-title">モザイク供給量変更</div>
+            <div class="msig-send-subtitle">Mosaic Supply Change</div>
+          </div>
+        </div>
+        <div class="msig-send-close" id="js-close-btn_sup"><i class="fas fa-times"></i></div>
+      </div>
+
+      <div class="msig-send-form">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">🪙 モザイク ID</label>
+          <div class="msig-send-select">
             <div class="select_mosaic_sup"></div>
           </div>
         </div>
 
-        <div class="Form-Item">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sup">減少　/　 増加</span></p>
-          <div style="text-align: right">　　　　　　　　　減少⬇️</div>
-          <div class="toggle5">
-            <input type="checkbox" name="check5" value="change_sup" id="change_sup" />
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">減少　/　増加</label>
+          <div class="msig-send-toggle-row">
+            <span>⬇️ 減少</span>
+            <div class="toggle5">
+              <input type="checkbox" name="check5" value="change_sup" id="change_sup" />
+            </div>
+            <span>増加 ⬆️</span>
           </div>
-          <div style="text-align: left">⬆️増加</div>
         </div>
 
-        <div class="Form-Item">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sup">変更量</span></p>
-          <input type="text" class="Form-Item-Input" id="change_Amount" />
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="change_Amount">📦 変更量</label>
+          <input type="text" class="msig-send-input" id="change_Amount" />
         </div>
 
-        <div class="Form-Item">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_sup">トランザクション手数料</span></p>
-          <div class="Form-Item-Input" style="text-align: center">
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">⛽ トランザクション手数料</label>
+          <div class="msig-send-select">
             <select class="re_maxFee" id="re_maxFee_sup">
               <option value="0.04">0.02 xym (slow)</option>
               <option value="0.05">0.04 xym</option>
@@ -574,8 +694,12 @@
             </select>
           </div>
         </div>
-        <br>
-        <input type="button" onclick="mosaic_supply();" class="Form-Btn" id="js-popup_sup" value="変更" />
+
+        <button class="msig-send-btn" onclick="mosaic_supply();" id="js-popup_sup">
+          ✍️ 変更する
+          <span class="msig-send-btn-arrow">→</span>
+        </button>
+
       </div>
     </div>
     <div class="black-background_sup" id="js-black-bg_sup"></div>
@@ -585,94 +709,115 @@
   <!-- ------- popup revokable mosaic モザイク回収　---------------->
 
   <div id="js-popup_r" class="popup_r">
-    <div class="popup_r-inner">
-      <div class="close-btn" id="js-close-btn_r"><i class="fas fa-times"></i></div>
-      <div class="Form_r">
-        <h4>♻️ モザイク回収 ♻️</h4>
-        　　　　　個別回収
-        <div class="Form-Item_r" style="border-top: 3px solid rgb(0, 204, 255)">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_r">モザイク</span></br></p>
-          <div class="Form-Item-Input" style="text-align: center">
+    <div class="popup_r-inner msig-send-card msig-send-card--wide">
+
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">♻️</span>
+          <div>
+            <div class="msig-send-title">モザイク回収</div>
+            <div class="msig-send-subtitle">Mosaic Revocation</div>
+          </div>
+        </div>
+        <div class="msig-send-close" id="js-close-btn_r"><i class="fas fa-times"></i></div>
+      </div>
+
+      <div class="msig-send-form">
+
+        <div class="msig-section-label">個別回収</div>
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">🪙 モザイク</label>
+          <div class="msig-send-select">
             <div class="revoke_select"></div>
           </div>
         </div>
-        <div class="Form-Item_r">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_r">アドレス</span></p>
-          <input type="text" class="Form-Item-Input_r" id="holderAddress" />
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="holderAddress">📮 アドレス</label>
+          <input type="text" class="msig-send-input" id="holderAddress" />
         </div>
-        <div class="Form-Item_r">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_r">数量</span></br></p>
-          <input type="text" class="Form-Item-Input_r" id="re_amount" />
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="re_amount">📦 数量</label>
+          <input type="text" class="msig-send-input" id="re_amount" />
         </div>
-        　　　　まとめて回収
-        <div class="Form-Item_r" style="border-top: 3px solid rgb(0, 204, 255)">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_r">上位100件まとめて回収</span></p>
-          <div class="toggle7">
-            <input type="checkbox" name="check7" value="re_agg_check" id="re_agg_check" />
+
+        <div class="msig-section-label">まとめて回収</div>
+
+        <div class="msig-send-field">
+          <div class="msig-send-toggle-row">
+            <label class="msig-send-field-label">上位100件まとめて回収</label>
+            <div class="toggle7">
+              <input type="checkbox" name="check7" value="re_agg_check" id="re_agg_check" />
+            </div>
           </div>
         </div>
-        　　ファイルで指定して回収
-        <div class="Form-Item_r"
-          style="border-top: 3px solid rgb(0, 204, 255);border-bottom: 0px solid rgb(0, 204, 255)">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_r">Address エラーチェック</span></br></p>
-          <div class="toggle8">
-            <input type="checkbox" name="check8" value="csv_check_re" id="csv_check_re" />
+
+        <div class="msig-send-fee-info msig-send-fee-notice">
+          <span class="msig-send-fee-icon">💰</span>
+          <div>
+            <div class="msig-send-fee-main">fee Multiprier = 100</div>
+            <div class="msig-send-fee-sub" id="fee_rev"></div>
           </div>
         </div>
 
-        <div class="Form-Item_r"
-          style="border-top: 0px solid rgb(0, 204, 255);border-bottom: 3px solid rgb(0, 204, 255)">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_r">CSVファイルを選択</span></p>
-          <label class="Address_List" style="margin-left: 100px">
-            <input type="file" id="upload-file_re">Address List (.csv)
-            <!-- address ファイルを選択 -->
-          </label>
-          <div style="display: inline-block; _display: inline;">
-            <p1>　選択されていません</p1>
+        <button class="msig-send-btn" onclick="revoke_mosaic();" id="js-popup_r">
+          ✍️ 回収する
+          <span class="msig-send-btn-arrow">→</span>
+        </button>
+
+        <details class="msig-send-advanced">
+          <summary class="msig-send-advanced-toggle">⚙️ ファイルで指定して回収（CSV・アドレスチェック）</summary>
+          <div class="msig-send-advanced-body">
+            <div class="msig-send-adv-row">
+              <span class="msig-send-adv-label">アドレス検証</span>
+              <div class="toggle8 msig-send-adv-toggle">
+                <input type="checkbox" name="check8" value="csv_check_re" id="csv_check_re" />
+              </div>
+            </div>
+            <div class="msig-send-adv-row" style="margin-top:8px">
+              <label class="msig-send-adv-file-btn" for="upload-file_re">
+                📂 CSVファイルを選択
+                <input type="file" id="upload-file_re" style="display:none">
+              </label>
+              <p1 class="msig-send-adv-filename">選択されていません</p1>
+            </div>
+            <div id="kurukuru_re"></div>
           </div>
-          <div id="kurukuru_re"></div>
+        </details>
+
+        <div class="msig-send-list-section">
+          <div class="msig-send-list-title">Mosaic Rich List</div>
+          <div style="text-align:center">
+            <button type="button" class="msig-send-sublink" onclick="holder_list();">🔍 リストを表示</button>
+          </div>
+          <div id="mosaic_ID_rev" style="text-align: center"></div>
+          <div id="namespace_rev" style="text-align: center"></div>
+          <div id="mosaic_img"></div>
+
+          <div class="msig-send-pager">
+            Page:
+            <select id="page_num_holder1" onchange="holder_list();">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+            </select>
+          </div>
+
+          <div class="table-container">
+            <button id="download_csv_button" class="msig-send-textlink">CSVダウンロード</button>
+            <div id="holder_table"></div>
+          </div>
         </div>
 
-        <input type="button" onclick="revoke_mosaic();" class="Form-Btn" id="js-popup_r" value="回収" />
-        <br>
-        <div style="text-align:center">fee Multiprier = 100</div>
-        <br>
-        <div id="fee_rev" style="text-align:right"></div>
-
-        <br>
-        <br>
-        <div style="text-align: center">
-          <div class="btn-gradient-radius" style="font-size: 20px; cursor:pointer;" onclick="holder_list();">Mosaic Rich
-            List</div>
-        </div>
-        <br>
-
-        <div id="mosaic_ID_rev" style="text-align: center"></div>
-        <div id="namespace_rev" style="text-align: center"></div>
-        <br>
-        <div id="mosaic_img"></div>
-
-        <div style="text-align: right; padding-right: 120px">
-          <div style="display: inline-block; _display: inline;">Page:</div>
-          <select id="page_num_holder1" onchange="holder_list();">
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-            <option value="6">6</option>
-            <option value="7">7</option>
-            <option value="8">8</option>
-            <option value="9">9</option>
-            <option value="10">10</option>
-          </select>
-        </div>
-
-        <br>
-        <div class="table-container">
-          <button id="download_csv_button">CSVダウンロード</button>
-          <table id="holder_table"></table>
-        </div>
       </div>
     </div>
     <div class="black-background_r" id="js-black-bg_r"></div>
@@ -681,19 +826,31 @@
   <!-- ------- popup エイリアスリンク ---------------->
 
   <div id="js-popup_L" class="popup_L">
-    <div class="popup_L-inner">
-      <div class="close-btn" id="js-close-btn_L"><i class="fas fa-times"></i></div>
-      <div class="Form_L">
-        <h4>エイリアスリンク</h4>
-        <div class="Form-Item_L">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_L">ネームスペース</span></br></p>
-          <div class="Form-Item-Input_L" style="text-align: center">
+    <div class="popup_L-inner msig-send-card">
+
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">🔗</span>
+          <div>
+            <div class="msig-send-title">エイリアスリンク</div>
+            <div class="msig-send-subtitle">Namespace Alias</div>
+          </div>
+        </div>
+        <div class="msig-send-close" id="js-close-btn_L"><i class="fas fa-times"></i></div>
+      </div>
+
+      <div class="msig-send-form">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">🏷️ ネームスペース</label>
+          <div class="msig-send-select">
             <div class="Namespace_select"></div>
           </div>
         </div>
-        <div class="Form-Item_L">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_L">エイリアスタイプ</span></br></p>
-          <div class="Form-Item-Input_L" style="text-align: center">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="alias_type">🔀 エイリアスタイプ</label>
+          <div class="msig-send-select">
             <select class="alias_type" id="alias_type" onchange="alias_type_change()">
               <option value="0">アドレスにリンク</option>
               <option value="1">モザイクにリンク</option>
@@ -703,21 +860,16 @@
           </div>
         </div>
 
-        <div class="Form-Item_L">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_L">アドレス / モザイクID</span></br></p>
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">📮 アドレス / モザイクID</label>
           <div id="alias_input_area">
-            <input type="text" class="Form-Item-Input_L" id="alias_address" />
+            <input type="text" class="msig-send-input" id="alias_address" />
           </div>
         </div>
 
-        <!-- <div class="Form-Item_L">
-        <p class="Form-Item-Label"><span class="Form-Item-Label-Required_L">モザイクID</span></br></p>
-        <input type="text" class="Form-Item-Input_L" id="Link_Mosaic_ID"/>
-      </div>  -->
-
-        <div class="Form-Item_L">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_L">トランザクション手数料</span></br></p>
-          <div class="Form-Item-Input_L" style="text-align: center">
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">⛽ トランザクション手数料</label>
+          <div class="msig-send-select">
             <select class="re_maxFee" id="re_maxFee_L">
               <option value="0.02">0.02 xym (slow)</option>
               <option value="0.04">0.04 xym</option>
@@ -727,7 +879,10 @@
           </div>
         </div>
 
-        <input type="button" onclick="alias_Link();" class="Form-Btn" id="js-popup_L" value="リンク / リンク解除" />
+        <button class="msig-send-btn" onclick="alias_Link();" id="js-popup_L">
+          ✍️ リンク / リンク解除する
+          <span class="msig-send-btn-arrow">→</span>
+        </button>
 
       </div>
     </div>
@@ -737,19 +892,31 @@
   <!-- ------- popup Metadata  ---------------->
 
   <div id="js-popup_Meta" class="popup_Meta">
-    <div class="popup_Meta-inner">
-      <div class="close-btn" id="js-close-btn_Meta"><i class="fas fa-times"></i></div>
-      <div class="Form_Meta">
-        <h4>Metadata</h4>
-        <div class="Form-Item_Meta">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Meta">メタデータ キー</span></br></p>
-          <div class="Form-Item-Input_Meta" style="text-align: center">
+    <div class="popup_Meta-inner msig-send-card msig-send-card--wide">
+
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">🗂️</span>
+          <div>
+            <div class="msig-send-title">Metadata 登録 / 更新</div>
+            <div class="msig-send-subtitle">Metadata Entry</div>
+          </div>
+        </div>
+        <div class="msig-send-close" id="js-close-btn_Meta"><i class="fas fa-times"></i></div>
+      </div>
+
+      <div class="msig-send-form">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">🔑 メタデータ キー</label>
+          <div class="msig-send-select">
             <div class="Meta_select"></div>
           </div>
         </div>
-        <div class="Form-Item_Meta">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Meta">タイプ</span></br></p>
-          <div class="Form-Item-Input_Meta" style="text-align: center">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="Meta_type">🗂️ タイプ</label>
+          <div class="msig-send-select">
             <select class="Meta_type" id="Meta_type" onchange="MetaKey_select();">
               <option value="-1">--- Select ---</option>
               <option value="0">Account (Address)</option>
@@ -760,37 +927,66 @@
         </div>
         <div id="meta_address"></div>
 
-        <div class="Form-Item_Meta" id="meta_mosaic" style="display: none">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Meta">モザイク ID</span></p>
-          <div class="Form-Item-Input_Meta" style="text-align: center">
+        <div class="msig-send-field" id="meta_mosaic" style="display: none">
+          <label class="msig-send-field-label">🪙 モザイク ID</label>
+          <div class="msig-send-select">
             <div class="select_mosaicID"></div>
           </div>
         </div>
 
-        <div class="Form-Item_Meta" id="meta_namespace" style="display: none">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Meta">ネームスペース</span></p>
-          <div class="Form-Item-Input_Meta" style="text-align: center">
+        <div class="msig-send-field" id="meta_namespace" style="display: none">
+          <label class="msig-send-field-label">🏷️ ネームスペース</label>
+          <div class="msig-send-select">
             <div class="Namespace_select_N"></div>
           </div>
         </div>
 
-        <div class="Form-Item_Meta">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Meta">value(値)</span></br></p>
-          <input type="text" class="Form-Item-Input_Meta_value" id="Meta_value" />
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="Meta_value">💬 value（値）</label>
+          <input type="text" class="msig-send-input" id="Meta_value" />
         </div>
 
-        <input type="button" onclick="Metadata();" class="Form-Btn" id="js-popup_Meta" value="登録 / 更新" />
-        <br>
-        <div style="text-align:center">fee Multiprier = 100</div>
-        <div id="Meta_fee1" style="text-align:right"></div>
-        <br>
-        <br>
-        <br>
-        <div style="text-align:center"><i><b><big>メタデータ エントリー</big></b></i></div>
+        <div class="msig-send-fee-simple">fee Multiprier = 100</div>
+        <div id="Meta_fee1" style="text-align:right;font-size:12px;color:#888;"></div>
 
-        <div style="text-align: right">
-          <div style="display: inline-block; _display: inline;">Page:</div>
+        <button class="msig-send-btn" onclick="Metadata();" id="js-popup_Meta">
+          ✍️ 登録 / 更新する
+          <span class="msig-send-btn-arrow">→</span>
+        </button>
 
+        <div class="msig-send-sublinks">
+          <button id="js-show-popup_meta_list" class="msig-send-sublink">📋 メタデータ エントリー一覧</button>
+        </div>
+
+        <div class="msig-send-note">
+          ※日本語の場合341文字(1023バイト)まで、半角英数字の場合1024文字まで登録出来ます。<br>
+          タイプでAccountを選択した場合、デフォルトはアクティブアカウントが設定されています。<br>
+          任意のアカウント(アドレス)を入力する事も出来ます。その場合はそのアカウントが署名する事でメタデータが登録出来ます。
+        </div>
+
+      </div>
+    </div>
+    <div class="black-background_Meta" id="js-black-bg_Meta"></div>
+  </div>
+
+  <!--    popup  メタデータ エントリー一覧（msig-send-cardパターン）   -->
+  <div id="js-popup_meta_list" class="popup_meta_list">
+    <div class="popup_meta_list-inner msig-send-card msig-send-card--wide">
+
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">📋</span>
+          <div>
+            <div class="msig-send-title">メタデータ エントリー</div>
+            <div class="msig-send-subtitle">Metadata Entries</div>
+          </div>
+        </div>
+        <div class="msig-send-close" id="js-close-btn_meta_list"><i class="fas fa-times"></i></div>
+      </div>
+
+      <div class="msig-send-form">
+        <div class="msig-send-pager">
+          Page:
           <select id="page_num_meta" onchange="select_Page_meta();">
             <option value="1">1</option>
             <option value="2">2</option>
@@ -814,90 +1010,96 @@
             <option value="20">20</option>
           </select>
         </div>
-        <br>
-        <table id="Meta_table"></table>
-        <br>
-        <div>
-          <br>※日本語の場合 341文字(1023バイト) まで、半角英数字の場合 1024文字 まで登録出来ます。
-          <br>タイプでAccountを選択した場合、デフォルトはアクティブアカウントが設定されています。
-          <br>任意のアカウント(アドレス)を入力する事も出来ます。その場合はそのアカウントが署名する事でメタデータが登録出来ます。
-        </div>
+        <div id="Meta_table"></div>
       </div>
     </div>
-    <div class="black-background_Meta" id="js-black-bg_Meta"></div>
+    <div class="black-background_meta_list" id="js-black-bg_meta_list"></div>
   </div>
 
 
   <!-- ------- popup aggregate ---------------->
 
   <div id="js-popup_agg" class="popup_agg">
-    <div class="popup_agg-inner">
-      <div class="close-btn" id="js-close-btn_agg"><i class="fas fa-times"></i></div>
-      <div class="Form_agg">
-        <h4>Aggregate Tx</h4>
+    <div class="popup_agg-inner msig-send-card">
 
-        <div class="Form-Item_agg">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_agg">モザイク</span></br></p>
-          <div class="Form-Item-Input_agg" style="text-align: center">
-            <div class="mosaic_ID2"></div> <!--   セレクトボックス     -->
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">📤</span>
+          <div>
+            <div class="msig-send-title">Aggregate Tx 一括送信</div>
+            <div class="msig-send-subtitle">CSV一括送信</div>
+          </div>
+        </div>
+        <div class="msig-send-close" id="js-close-btn_agg"><i class="fas fa-times"></i></div>
+      </div>
+
+      <div class="msig-send-form">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">🪙 モザイク</label>
+          <div class="msig-send-mosaic-row">
+            <div class="mosaic_ID2 msig-send-mosaic-select"></div>
+            <div class="msig-send-balance">
+              <span id="hoyu-ryo_agg" style="color:#2563eb"></span>
+              <span id="kigen-gire_agg" style="color:#dc2626;font-size:11px"></span>
+            </div>
           </div>
         </div>
 
-        <div id="hoyu-ryo_agg" style="text-align: right;color: blue"></div>
-        <div id="kigen-gire_agg" style="text-align: right;color: red"></div>
-
-        <div class="Form-Item_agg">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_agg">数　量</span></br></p>
-          <input type="text" class="Form-Item-Input_agg" id="form-amount2" />
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="form-amount2">📦 数量</label>
+          <input type="text" class="msig-send-input" id="form-amount2" />
         </div>
 
-        <div class="Form-Item_agg">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_agg">メッセージ</span></br></p>
-          <input type="text" class="Form-Item-Input_agg" id="form-message2" />
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="form-message2">💬 メッセージ（任意）</label>
+          <input type="text" class="msig-send-input" id="form-message2" />
         </div>
 
-        <br>
-        <div class="Form-Item_agg">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_agg">Address エラーチェック</span></br></p>
-          <div class="toggle6">
-            <input type="checkbox" name="check6" value="csv_check_agg" id="csv_check_agg" />
+        <div class="msig-send-fee-info msig-send-fee-notice">
+          <span class="msig-send-fee-icon">💰</span>
+          <div>
+            <div class="msig-send-fee-main">fee Multiprier = 100</div>
+            <div class="msig-send-fee-sub" id="agg_fee1"></div>
           </div>
         </div>
 
-        <div class="Form-Item_agg">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_agg">CSVファイルを選択</span></p>
-          <label class="Address_List">
-            <input type="file" id="upload-file_agg">Address List (.csv)
-            <!-- address ファイルを選択 -->
-          </label>
-          <div style="display: inline-block; _display: inline;">
-            <p1>　選択されていません</p1>
+        <button class="msig-send-btn" onclick="handleSSS_agg();" id="js-popup_agg">
+          ✍️ 一括送信する
+          <span class="msig-send-btn-arrow">→</span>
+        </button>
+
+        <details class="msig-send-advanced">
+          <summary class="msig-send-advanced-toggle">⚙️ 高度なオプション（CSV・アドレスチェック）</summary>
+          <div class="msig-send-advanced-body">
+            <div class="msig-send-adv-row">
+              <span class="msig-send-adv-label">アドレス検証</span>
+              <div class="toggle6 msig-send-adv-toggle">
+                <input type="checkbox" name="check6" value="csv_check_agg" id="csv_check_agg" />
+              </div>
+            </div>
+            <div class="msig-send-adv-row" style="margin-top:8px">
+              <label class="msig-send-adv-file-btn" for="upload-file_agg">
+                📂 CSVファイルを選択
+                <input type="file" id="upload-file_agg" style="display:none">
+              </label>
+              <p1 class="msig-send-adv-filename">選択されていません</p1>
+            </div>
+            <div id="kurukuru_agg"></div>
+
+            <div class="msig-send-note" style="margin-top:12px;text-align:center">
+              ~~~~~~~~~　csvファイルの例　~~~~~~~~~<br><br>
+              <img src="src/agg_csv.png" style="max-width:100%">
+              <br><br><a href="https://www.microsoft.com/ja-jp/microsoft-365/excel"
+                target="_blank">Excel</a>を開き、A列に<b>任意のラベル</b>、B列に<b>アドレス</b>、または<b>ネームスペース</b>を入力して<br>CSVファイルを「UTF-8(コンマ区切り)(.csv)」で作成してください。<br><br>
+              C列に<b>数量</b>、D列に<b>モザイクID</b>、E列に<b>メッセージ</b>を個別に設定する事も出来ます。<br>
+              1つのファイルに登録出来るのは100件までです。<br><br>
+              "," (カンマ) が含まれているとエラーになるので使用しないでください。<br>
+              アカウント制限があるアドレスが含まれていると、一括送信がエラーになる場合があります。
+            </div>
           </div>
-          <div id="kurukuru_agg"></div>
-        </div>
-        <br>
-        <!-- <p2 id="address_list" style="overflow-wrap: break-word"></p2> -->
+        </details>
 
-        <input type="button" onclick="handleSSS_agg();" class="Form-Btn" id="js-popup_agg" value="一括送信" />
-        <br>
-        <div style="text-align:center">fee Multiprier = 100</div>
-        <div id="agg_fee1" style="text-align:right"></div>
-        <br>
-        <br>
-        <br>
-        <p style="text-align:center">
-          ~~~~~~~~~　　csvファイルの例　　~~~~~~~~~<br><br>
-          <img src="src/agg_csv.png">
-          <br><br><a href="https://www.microsoft.com/ja-jp/microsoft-365/excel"
-            target="_blank">Excel</a>を開き、A列に<b>任意のラベル</b>、B列に<b>アドレス</b>、または<b>ネームスペース</b>を入力して<br>CSVファイルを「UTF-8(コンマ区切り)(.csv)」で作成してください。
-          <br>
-          <br>C列に<b>数量</b>、D列に<b>モザイクID</b>、E列に<b>メッセージ</b>を個別に設定する事も出来ます。
-          <br>1つのファイルに登録出来るのは100件までです。
-          <br>
-          <br>"," (カンマ) が含まれているとエラーになるので使用しないでください。
-          <br>アカウント制限があるアドレスが含まれていると、一括送信がエラーになる場合があります。
-
-        </p>
       </div>
     </div>
     <div class="black-background_agg" id="js-black-bg_agg"></div>
@@ -906,68 +1108,86 @@
   <!-- ------- popup accountInfo ---------------->
 
   <div id="js-popup_aInfo" class="popup_aInfo">
-    <div class="popup_aInfo-inner">
-      <div class="close-btn" id="js-close-btn_aInfo"><i class="fas fa-times"></i></div>
-      <div class="Form_aInfo">
-        <h4>Account Info</h4>
-        <div class="Form-Item_aInfo">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_aInfo">アドレス</span></p>
-          <div type="text" class="Form-Item-Input_aInfo" id="aInfo-addr"></div>
-        </div>
-        <div class="Form-Item_aInfo">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_aInfo">公開鍵</span></p>
-          <div type="text" class="Form-Item-Input_aInfo" id="aInfo-pubkey"></div>
-        </div>
-        <div class="Form-Item_aInfo">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_aInfo">インポータンス</span></p>
-          <div type="text" class="Form-Item-Input_aInfo" id="importance"></div>
-        </div>
+    <div class="popup_aInfo-inner msig-send-card msig-send-card--wide">
 
-        <h4>🌾 Harvesting 🌾</h4>
-        <div id=hv_status style="text-align: center;font-size: 20px"></div>
-        <br>
-        <div id=hv_node style="text-align: center;font-size: 20px"></div>
-        <div class="container">
-          <div class="card mt-3 mb-3">
-            <div class="card-body">
-              <div style="text-align: right"><button type=“button” class="btn-gradient-radius"
-                  onclick="window.open('https://symbol-tools.com/symbolTools/view/tool/nodeList.html')">ノードリスト</button>
-              </div>
-              <div class="mb-3">
-                <label for="node" class="form-label">委任するノードを入力してください</label>
-                <input type="text" class="form-control" id="node" placeholder="例）symbol-mikun.net　　　（HTTPSノードのみ）">
-                <br>
-                <div class="d-grid gap-2 col-6 mx-auto mt-3">
-                  <div style="text-align: center;"><button class="btn btn-primary" id="txBtn" type="button"
-                      onclick="handleSSS_harvest()">ハーベスト開始　/　ノード変更 </button></div>
-                </div>
-              </div>
-            </div>
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">👤</span>
+          <div>
+            <div class="msig-send-title">Account Info</div>
+            <div class="msig-send-subtitle">アカウント情報 / ハーベスト</div>
           </div>
         </div>
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
-          integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
-          crossorigin="anonymous"></script>
-        <br>
-        <div style="text-align:center; font-size:13px; color:#555;">
-          <div>最新ブロック　　: <span id="chain_height">-</span></div>
-          <div>確定ブロック　　: <span id="finalized_chain_height">-</span></div>
+        <div class="msig-send-close" id="js-close-btn_aInfo"><i class="fas fa-times"></i></div>
+      </div>
+
+      <div class="msig-send-form">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">📍 アドレス</label>
+          <div class="msig-send-readonly-box msig-send-copy-row">
+            <div id="aInfo-addr" style="flex:1;min-width:0;"></div>
+            <button type="button" class="msig-send-copy-btn" title="コピー"
+              onclick="Onclick_Copy(this, document.getElementById('aInfo-addr').textContent.trim())">📋</button>
+          </div>
         </div>
-        <br>
-        <table id="harvest" class="table" style="width:45%;margin: auto;text-align: center">
-          <thead>
-            <tr>
-              <th>日時</th>
-              <th>ブロック高</th>
-              <th>数量</th>
-            </tr>
-          </thead>
-        </table>
-        <br>
-        <dl>
-          <dd id="harvests_footer" style="text-align: center"><a id="harvests_more"
-              href="javascript:void(0)">さらに読み込む</a></dd>
-        </dl>
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">🔑 公開鍵</label>
+          <div class="msig-send-readonly-box msig-send-copy-row">
+            <div id="aInfo-pubkey" style="flex:1;min-width:0;"></div>
+            <button type="button" class="msig-send-copy-btn" title="コピー"
+              onclick="Onclick_Copy(this, document.getElementById('aInfo-pubkey').textContent.trim())">📋</button>
+          </div>
+        </div>
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">📊 インポータンス</label>
+          <div class="msig-send-readonly-box" id="importance"></div>
+        </div>
+
+        <div class="msig-send-list-section">
+          <div class="msig-send-list-title">🌾 Harvesting 🌾</div>
+          <div id="hv_status" style="text-align: center;font-size: 20px"></div>
+          <div id="hv_node" style="text-align: center;font-size: 20px;margin-top:6px"></div>
+
+          <div class="msig-send-field">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+              <label class="msig-send-field-label" for="node" style="margin:0;font-size:14px;color:#444;">委任するノードを入力してください</label>
+              <button class="msig-send-textlink" type="button"
+                onclick="window.open('https://symbol-tools.com/symbolTools/view/tool/nodeList.html')">📋 ノードリストを見る</button>
+            </div>
+            <input type="text" class="msig-send-input" id="node" placeholder="例）symbol-mikun.net　　　（HTTPSノードのみ）">
+          </div>
+
+          <button class="msig-send-btn" id="txBtn" type="button" onclick="handleSSS_harvest()">
+            ハーベスト開始　/　ノード変更
+          </button>
+          <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
+            crossorigin="anonymous"></script>
+
+          <div class="msig-send-note" style="text-align:center;margin-top:14px">
+            <div>最新ブロック　　: <span id="chain_height">-</span></div>
+            <div>確定ブロック　　: <span id="finalized_chain_height">-</span></div>
+          </div>
+
+          <table id="harvest" class="table" style="width:100%;margin-top:12px;text-align: center">
+            <thead>
+              <tr>
+                <th>日時</th>
+                <th>ブロック高</th>
+                <th>数量</th>
+              </tr>
+            </thead>
+          </table>
+
+          <dl>
+            <dd id="harvests_footer" style="text-align: center"><a id="harvests_more"
+                href="javascript:void(0)">さらに読み込む</a></dd>
+          </dl>
+        </div>
+
       </div>
     </div>
     <div class="black-background_aInfo" id="js-black-bg_aInfo"></div>
@@ -975,27 +1195,42 @@
   </div>
 
 
-  <!-- ------- popup donation ---------------->
+  <!-- ------- popup donation（msig-send-cardパターン） ---------------->
 
   <div id="js-popup_dona" class="popup_dona">
-    <div class="popup_dona-inner">
-      <div class="close-btn" id="js-close-btn_dona"><i class="fas fa-times"></i></div>
-      <div class="Form_dona">
-        <h4>開発者へ寄付</h4>
-        <div style="text-align: center">NBOGLHXSI7FDRAO2CMZV5PQZ5UHZ3IED67ULPSY</div>
-        <br>
-        <div class="Form-Item_dona">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_dona">XYM 数量</span></br></p>
-          <input type="text" class="Form-Item-Input_dona" id="dona_amount" />
+    <div class="popup_dona-inner msig-send-card">
+
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">💝</span>
+          <div>
+            <div class="msig-send-title">開発者へ寄付</div>
+            <div class="msig-send-subtitle">Donation</div>
+          </div>
         </div>
-        <div class="Form-Item_dona">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_dona">メッセージ</span></br></p>
-          <input type="text" class="Form-Item-Input_dona" id="dona_message" />
+        <div class="msig-send-close" id="js-close-btn_dona"><i class="fas fa-times"></i></div>
+      </div>
+
+      <div class="msig-send-from-box">
+        <div class="msig-send-from-label">送金先アドレス</div>
+        <div class="msig-send-from-addr">NBOGLHXSI7FDRAO2CMZV5PQZ5UHZ3IED67ULPSY</div>
+      </div>
+
+      <div class="msig-send-form">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="dona_amount">📦 XYM 数量</label>
+          <input type="text" class="msig-send-input" id="dona_amount" />
         </div>
-        <div class="Form-Item_dona">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_dona">トランザクション手数料</span></br></p>
-          <!-- <input type="text" class="Form-Item-Input_r" id="re_maxFee"/>  -->
-          <div class="Form-Item-Input" style="text-align: center">
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label" for="dona_message">💬 メッセージ（任意）</label>
+          <input type="text" class="msig-send-input" id="dona_message" />
+        </div>
+
+        <div class="msig-send-field">
+          <label class="msig-send-field-label">⛽ トランザクション手数料</label>
+          <div class="msig-send-select">
             <select class="re_maxFee" id="dona_maxFee">
               <option value="0.02">0.02 xym (slow)</option>
               <option value="0.04">0.04 xym</option>
@@ -1004,28 +1239,40 @@
             </select>
           </div>
         </div>
-        <input type="button" onclick="handleSSS_dona();" class="Form-Btn" id="js-popup_dona" value="送信" />
+
+        <button class="msig-send-btn" onclick="handleSSS_dona();" id="js-popup_dona">
+          ✍️ 送信する
+          <span class="msig-send-btn-arrow">→</span>
+        </button>
 
       </div>
     </div>
     <div class="black-background_dona" id="js-black-bg_dona"></div>
   </div>
 
-  <!--    popup  Multisig Account   ------------------------------------>
+  <!--    popup  Multisig Account（msig-send-cardパターン）   ------------------------------------>
   <div id="js-popup_Msig" class="popup_Msig">
-    <div class="popup_Msig-inner">
-      <div class="close-btn" id="js-close-btn_Msig"><i class="fas fa-times"></i></div>
-      <div class="Form_Msig">
-        <h4>🔐 Multisig Account</h4>
+    <div class="popup_Msig-inner msig-send-card">
 
-        <!-- アカウント表示 -->
-        <div class="Form-Item_Msig">
-          <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Msig">対象アカウント</span></p>
-          <div class="Form-Item-Input_Msig" style="text-align:center">
-            <div class="multisig_address_select_2" style="font-size:13px;word-break:break-all"></div>
+      <div class="msig-send-header">
+        <div class="msig-send-header-left">
+          <span class="msig-send-icon">🔐</span>
+          <div>
+            <div class="msig-send-title">Multisig Account</div>
+            <div class="msig-send-subtitle">マルチシグ設定</div>
           </div>
         </div>
-        <div id="default_account" style="text-align:center;margin:8px 0"></div>
+        <div class="msig-send-close" id="js-close-btn_Msig"><i class="fas fa-times"></i></div>
+      </div>
+
+      <!-- アカウント表示 -->
+      <div class="msig-send-from-box">
+        <div class="msig-send-from-label">対象アカウント</div>
+        <div class="multisig_address_select_2 msig-send-from-addr"></div>
+      </div>
+      <div id="default_account" style="text-align:center;margin:8px 0"></div>
+
+      <div class="msig-send-form">
 
         <!-- 現在の連署者（編集モード時に表示） -->
         <div id="rensyosya"></div>
@@ -1044,9 +1291,9 @@
 
         <!-- 新規作成モード: 絶対値で minApproval / minRemoval (最大25) -->
         <div id="msig-new-section" style="display:none">
-          <div class="Form-Item_Msig">
-            <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Msig">最小　承認者数</span></p>
-            <div class="Form-Item-Input_Msig" style="text-align:center">
+          <div class="msig-send-field">
+            <label class="msig-send-field-label">最小　承認者数</label>
+            <div class="msig-send-select">
               <select class="msig_min_del" id="min_sig">
                 <option value="1">1</option>
                 <option value="2">2</option>
@@ -1076,9 +1323,9 @@
               </select>
             </div>
           </div>
-          <div class="Form-Item_Msig">
-            <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Msig">最小削除　承認者数</span></p>
-            <div class="Form-Item-Input_Msig" style="text-align:center">
+          <div class="msig-send-field">
+            <label class="msig-send-field-label">最小削除　承認者数</label>
+            <div class="msig-send-select">
               <select class="msig_min_del" id="min_del_sig">
                 <option value="1">1</option>
                 <option value="2">2</option>
@@ -1112,17 +1359,17 @@
 
         <!-- 編集モード: 変更後の最小承認者数を絶対値で選択（セレクトはJSで動的生成） -->
         <div id="msig-delta-section" style="display:none">
-          <div class="Form-Item_Msig">
-            <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Msig">変更後の最小承認者数</span></p>
-            <div class="Form-Item-Input_Msig" style="text-align:center">
+          <div class="msig-send-field">
+            <label class="msig-send-field-label">変更後の最小承認者数</label>
+            <div class="msig-send-select">
               <select class="msig_min_del" id="delta_sig">
                 <option value="1">1</option>
               </select>
             </div>
           </div>
-          <div class="Form-Item_Msig">
-            <p class="Form-Item-Label"><span class="Form-Item-Label-Required_Msig">変更後の最小削除承認者数</span></p>
-            <div class="Form-Item-Input_Msig" style="text-align:center">
+          <div class="msig-send-field">
+            <label class="msig-send-field-label">変更後の最小削除承認者数</label>
+            <div class="msig-send-select">
               <select class="msig_min_del" id="delta_del_sig">
                 <option value="1">1</option>
               </select>
@@ -1130,14 +1377,14 @@
           </div>
         </div>
 
+        <button class="msig-send-btn" onclick="Msig_account();" id="js-popup_Msig_btn">
+          ✍️ 送信する
+          <span class="msig-send-btn-arrow">→</span>
+        </button>
+        <div id="fee_Msig" style="text-align:right;font-size:12px;color:#888;"></div>
 
-        <br>
-        <input type="button" onclick="Msig_account();" class="Form-Btn" id="js-popup_Msig_btn" value="送信" />
-        <br>
-        <div id="fee_Msig" style="text-align:right"></div>
-        <br>
-        <div style="text-align:center;color:darkorange;font-size:13px">テストネット環境で動作確認してからメインネットで作業することをおすすめします。</div>
-        <br>
+        <div class="msig-send-note" style="text-align:center;color:darkorange">テストネット環境で動作確認してからメインネットで作業することをおすすめします。</div>
+
       </div>
     </div>
     <div class="black-background_Msig" id="js-black-bg_Msig"></div>
@@ -1229,7 +1476,7 @@
                 📂 CSVファイルを選択
                 <input type="file" id="upload-file_msig" style="display:none">
               </label>
-              <span class="msig-send-adv-filename">選択されていません</span>
+              <p1 class="msig-send-adv-filename">選択されていません</p1>
             </div>
             <div id="kurukuru_msig"></div>
           </div>
@@ -1276,16 +1523,45 @@
         });
       }
 
-      // ポップアップを開いた時にモザイク一覧を自動ロード
+      // ポップアップを開いた時に供給量プレースホルダーを最新化
       if (showBtn) {
         showBtn.addEventListener('click', function () {
           setTimeout(function () {
-            if (typeof window.select_Page_mosa1 === 'function') window.select_Page_mosa1();
+            if (typeof window.updateSupplyPlaceholder === 'function') window.updateSupplyPlaceholder();
           }, 50);
         });
       }
     }
     popupImage_m();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_ms_list() {  //  発行したモザイク一覧　ポップアップ
+      var popup_ms_list = document.getElementById('js-popup_ms_list');
+      if (!popup_ms_list) return;
+      var blackBg = document.getElementById('js-black-bg_ms_list');
+      var closeBtn = document.getElementById('js-close-btn_ms_list');
+      var showBtn = document.getElementById('js-show-popup_ms_list');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_ms_list.classList.toggle('is-show');
+        });
+      }
+
+      if (showBtn) {
+        showBtn.addEventListener('click', function () {
+          popup_ms_list.classList.toggle('is-show');
+          if (popup_ms_list.classList.contains('is-show')) {
+            if (typeof window.select_Page_mosa1 === 'function') window.select_Page_mosa1();
+          }
+        });
+      }
+    }
+    popupImage_ms_list();
 
     ////////////////////////////////////////////////
 
@@ -1319,29 +1595,44 @@
 
       closePopUp(blackBg);
       closePopUp(closeBtn);
-      // showBtnは下で個別処理（toggle + NSロード）
+      closePopUp(showBtn);
       function closePopUp(elem) {
         if (!elem) return;
         elem.addEventListener('click', function () {
           popup_n.classList.toggle('is-show');
         });
       }
+    }
+    popupImage_n();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_ns_list() {  //  所有ネームスペース一覧　ポップアップ
+      var popup_ns_list = document.getElementById('js-popup_ns_list');
+      if (!popup_ns_list) return;
+      var blackBg = document.getElementById('js-black-bg_ns_list');
+      var closeBtn = document.getElementById('js-close-btn_ns_list');
+      var showBtn = document.getElementById('js-show-popup_ns_list');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_ns_list.classList.toggle('is-show');
+        });
+      }
 
       if (showBtn) {
         showBtn.addEventListener('click', function () {
-          popup_n.classList.toggle('is-show');
-          if (popup_n.classList.contains('is-show')) {
-            // モーダルを開くたびに所有NSを再ロード
-            setTimeout(function () {
-              if (typeof window.select_Page_namespace === 'function') {
-                window.select_Page_namespace();
-              }
-            }, 50);
+          popup_ns_list.classList.toggle('is-show');
+          if (popup_ns_list.classList.contains('is-show')) {
+            if (typeof window.select_Page_namespace === 'function') window.select_Page_namespace();
           }
         });
       }
     }
-    popupImage_n();
+    popupImage_ns_list();
 
     ////////////////////////////////////////////////
 
@@ -1421,16 +1712,37 @@
         });
       }
 
-      // ポップアップを開いた時にメタデータ一覧を自動ロード
+    }
+    popupImage_Meta();
+
+    ////////////////////////////////////////////////
+
+    function popupImage_meta_list() {  //  メタデータ エントリー一覧　ポップアップ
+      var popup_meta_list = document.getElementById('js-popup_meta_list');
+      if (!popup_meta_list) return;
+      var blackBg = document.getElementById('js-black-bg_meta_list');
+      var closeBtn = document.getElementById('js-close-btn_meta_list');
+      var showBtn = document.getElementById('js-show-popup_meta_list');
+
+      closePopUp(blackBg);
+      closePopUp(closeBtn);
+      function closePopUp(elem) {
+        if (!elem) return;
+        elem.addEventListener('click', function () {
+          popup_meta_list.classList.toggle('is-show');
+        });
+      }
+
       if (showBtn) {
         showBtn.addEventListener('click', function () {
-          setTimeout(function () {
+          popup_meta_list.classList.toggle('is-show');
+          if (popup_meta_list.classList.contains('is-show')) {
             if (typeof window.select_Page_meta === 'function') window.select_Page_meta();
-          }, 50);
+          }
         });
       }
     }
-    popupImage_Meta();
+    popupImage_meta_list();
 
     ////////////////////////////////////////////////
 

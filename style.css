@@ -3771,14 +3771,58 @@ th,td {
   border: 1.5px solid #ccc;
 }
 
+/**********************************************************/
+/* モーダルウィンドウ   一覧ポップアップ（発行モザイク/所有NS/メタデータ）  */
+/**********************************************************/
+.popup_ms_list,
+.popup_ns_list,
+.popup_meta_list {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 700;
+  opacity: 0;
+  visibility: hidden;
+  transition: .6s;
+  display: flex;
+  align-items: center;
+}
+.popup_ms_list.is-show,
+.popup_ns_list.is-show,
+.popup_meta_list.is-show {
+  opacity: 1;
+  visibility: visible;
+}
+.black-background_ms_list,
+.black-background_ns_list,
+.black-background_meta_list {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 1000%;
+  background-color: rgba(0,0,0,.8);
+  z-index: -1;
+  cursor: pointer;
+}
+.popup_ms_list-inner,
+.popup_ns_list-inner,
+.popup_meta_list-inner {
+  position: relative;
+  z-index: 3;
+}
+
 /* ═══════════════════════════════════════════════════
    マルチシグ送信パネル リデザイン (msig-send-*)
    ═══════════════════════════════════════════════════ */
 
 /* ── カード全体 ───────────────────────────────────── */
-.popup_multisig-inner.msig-send-card {
+.msig-send-card {
   display: flex;
   flex-direction: column;
+  margin: 0 auto;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 12px 48px rgba(80, 0, 120, 0.18);
@@ -3893,6 +3937,18 @@ th,td {
   background: #fff;
   box-shadow: 0 0 0 3px rgba(160,64,224,0.12);
 }
+.msig-send-input.msig-send-input-error {
+  border-color: #dc2626;
+  background: #fff5f5;
+}
+.msig-send-input.msig-send-input-error:focus {
+  box-shadow: 0 0 0 3px rgba(220,38,38,0.12);
+}
+.msig-send-error-text {
+  font-size: 11px;
+  color: #dc2626;
+  margin-top: 2px;
+}
 .msig-send-textarea {
   resize: vertical;
   min-height: 70px;
@@ -3905,8 +3961,10 @@ th,td {
   flex-direction: column;
   gap: 4px;
 }
-.msig-send-mosaic-select select {
+.msig-send-mosaic-select select,
+.msig-send-select select {
   width: 100%;
+  height: auto;
   padding: 10px 13px;
   border: 1.5px solid #ddd;
   border-radius: 10px;
@@ -4010,6 +4068,147 @@ th,td {
   font-size: 12px;
   color: #aaa;
   font-style: italic;
+}
+
+/* ── 汎用パーツ（Mosaic/Namespace/Metadata等のポップアップ共通） ── */
+.msig-send-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.msig-send-fee-simple {
+  text-align: center;
+  font-size: 12px;
+  color: #7a5800;
+  background: #fffbe8;
+  border: 1.5px solid #f0d800;
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.msig-send-note {
+  font-size: 11px;
+  color: #888;
+  line-height: 1.7;
+  margin-top: 6px;
+}
+.msig-send-sublinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.msig-send-sublink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: linear-gradient(90deg, #f5e6ff, #e8f4ff);
+  border: none;
+  border-radius: 20px;
+  font-size: 12px;
+  color: #7050a0;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.msig-send-sublink:hover { opacity: 0.8; }
+
+.msig-send-textlink {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: #7050a0;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+.msig-send-textlink:hover { color: #4a0080; }
+
+.msig-send-readonly-box {
+  padding: 10px 13px;
+  border: 1.5px solid #e0d0f0;
+  border-radius: 10px;
+  font-size: 13px;
+  font-family: monospace;
+  color: #3a005a;
+  background: linear-gradient(90deg, #fff5ff, #f0f8ff);
+  word-break: break-all;
+  text-align: center;
+  box-sizing: border-box;
+}
+.msig-send-readonly-box.msig-send-copy-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.msig-send-copy-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+  opacity: 0.65;
+  transition: opacity 0.15s;
+}
+.msig-send-copy-btn:hover { opacity: 1; }
+
+/* ── リスト区画（発行済みモザイク一覧など） ─────────── */
+.msig-send-list-section {
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1.5px solid #f0e8f8;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.msig-send-list-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #4a0080;
+  text-align: center;
+}
+.msig-send-pager {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #888;
+}
+.msig-send-pager select {
+  padding: 4px 8px;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  font-size: 12px;
+  background: #fafafa;
+  outline: none;
+  cursor: pointer;
+}
+
+/* 列数が多い一覧テーブルを持つポップアップ用の横幅拡張 */
+.msig-send-card.msig-send-card--wide {
+  max-width: 760px;
+}
+.msig-send-card.msig-send-card--full {
+  max-width: 1500px;
+}
+/* 一覧テーブルは横スクロールさせず、列数に応じて自然な幅で全部表示する */
+#ms_table table, #ns_table table, #Meta_table table, #holder_table table {
+  table-layout: auto;
+}
+#ms_table td, #ms_table th,
+#ns_table td, #ns_table th,
+#Meta_table td, #Meta_table th,
+#holder_table td, #holder_table th {
+  white-space: nowrap;
 }
 
 /* ═══════════════════════════════════════════════════
