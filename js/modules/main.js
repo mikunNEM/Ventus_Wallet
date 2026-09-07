@@ -2247,6 +2247,33 @@ async function Onclick_Namespace() {
     }
 
     try {
+        // 既存ネームスペース（更新の場合）の残り有効期間 + 今回の延長分が
+        // 現在ブロック高から5,256,000ブロック（約5年）を超えないかチェック
+        const nsPath = sdkSymbol.generateNamespacePath(namespaceName);
+        const nsHexId = nsPath[nsPath.length - 1].toString(16).toUpperCase();
+        let existingEndHeight = null;
+        try {
+            const nsInfo = await fetchJson(new URL(`/namespaces/${nsHexId}`, NODE));
+            existingEndHeight = Number(nsInfo.namespace.endHeight);
+        } catch {
+            existingEndHeight = null; // 見つからない = 新規登録扱い
+        }
+        if (existingEndHeight) {
+            const chain = await getChainInfo();
+            const currentHeight = Number(chain.height);
+            // existingEndHeightは猶予期間(GRACE_BLOCK)込みの生値なので、上限側にも同じ猶予期間分を加算して比較する
+            const maxAddableBlocks = (5256000 + GRACE_BLOCK) - (existingEndHeight - currentHeight);
+            if (duration > maxAddableBlocks) {
+                const maxAddableDaysStr = (maxAddableBlocks / 2880).toLocaleString('ja-JP', { maximumFractionDigits: 1 });
+                Swal.fire({
+                    title: '延長できる期間の上限を超えています',
+                    text: `延長できるのはあと最大 ${maxAddableBlocks.toLocaleString()} ブロック（約${maxAddableDaysStr}日）までです（残りの総有効期間は現在から5,256,000ブロック＝約5年を超えられません）。`,
+                    icon: 'warning'
+                });
+                return;
+            }
+        }
+
         const tx = buildRootNamespaceTx(namespaceName, duration, signerPubKey);
         const feeXym = Number(tx.fee.value) / 1_000_000;
         const feeEl = document.getElementById('fee_n');
@@ -4072,7 +4099,7 @@ async function select_Page_namespace() {
 
         // ヘッダー
         const hdr = document.createElement('tr');
-        ['ネームスペース名','ネームスペースID','更新期限','ステータス','タイプ','🔗リンク🔗'].forEach(h => {
+        ['ネームスペース名','ネームスペースID','有効期限','ステータス','タイプ','🔗リンク🔗'].forEach(h => {
             const th = document.createElement('th');
             th.textContent = h;
             th.style.cssText = 'background:#0a5;color:#fff;padding:6px 8px;text-align:center;white-space:nowrap;';
@@ -4082,9 +4109,12 @@ async function select_Page_namespace() {
 
         namespaces.forEach((nsEntry, idx) => {
             const ns = nsEntry.namespace ?? nsEntry;
-            const endH = Number(ns.endHeight ?? 0);
+            const rawEndH = Number(ns.endHeight ?? 0);
+            // REST APIが返すendHeightには猶予期間(GRACE_BLOCK)が最初から加算されているため、
+            // 実際に無効化される「有効期限」はここからGRACE_BLOCK分を差し引いた時点になる
+            const endH = (rawEndH !== 0 && rawEndH < 99_999_999) ? rawEndH - GRACE_BLOCK : rawEndH;
             const remainBlocks = endH - currentHeight;
-            // 更新期限
+            // 有効期限
             let expiryStr = '----------------';
             if (endH !== 0 && endH < 99_999_999) {
                 const expiryMs = (epochAdjustment * 1000) + (currentTs + remainBlocks * 30000);
@@ -4526,10 +4556,20 @@ async function ex_date2() {
         if (mySeq !== ex_date2_seq) return; // 後発の呼び出しに追い越された場合は結果を捨てる
 
         if (existingEndHeight) {
+            // REST APIのendHeightには猶予期間(GRACE_BLOCK)が最初から加算されているため、
+            // 表示用の「有効期限」はここからGRACE_BLOCK分を差し引いた時点になる
+            const currentTrueExpiry = existingEndHeight - GRACE_BLOCK;
+            // 残りの総有効期間（更新後の残存ブロック数）が現在から5,256,000ブロック（約5年）を超えていないか
+            // ※existingEndHeightは猶予期間込みの生値なので、上限側にも同じ猶予期間分を加算して比較する
+            const remainingToExpiry = existingEndHeight - currentHeight;
+            const maxAddableBlocks = (5256000 + GRACE_BLOCK) - remainingToExpiry;
+            const overLimit = blocks > maxAddableBlocks;
+            const maxAddableDaysStr = (maxAddableBlocks / 2880).toLocaleString('ja-JP', { maximumFractionDigits: 1 });
             el.innerHTML = `
                 <div>レンタル期間　約${daysStr}日</div>
-                <div>現在の有効期限　${heightToDateStr(existingEndHeight)}</div>
-                <div style="font-size:16px;color:blue;font-weight:bold;">更新後の有効期限　${heightToDateStr(existingEndHeight + blocks)}</div>
+                <div>現在の有効期限　${heightToDateStr(currentTrueExpiry)}</div>
+                <div style="font-size:16px;color:${overLimit ? 'red' : 'blue'};font-weight:bold;">更新後の有効期限　${heightToDateStr(currentTrueExpiry + blocks)}</div>
+                ${overLimit ? `<div style="color:red;">⚠️ 延長できるのはあと最大 ${maxAddableBlocks.toLocaleString()} ブロック（約${maxAddableDaysStr}日、〜${heightToDateStr(currentHeight + 5256000)}まで）です</div>` : ''}
             `;
         } else {
             el.innerHTML = `
